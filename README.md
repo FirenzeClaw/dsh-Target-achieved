@@ -5,8 +5,8 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933.svg)](https://nodejs.org)
 [![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.5-7c3aed.svg)](https://github.com/deepseek-ai/deepseek-harness)
-[![Tests](https://img.shields.io/badge/tests-183%20passing-brightgreen.svg)](#开发)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](CHANGELOG.md)
+[![Tests](https://img.shields.io/badge/tests-197%20passing-brightgreen.svg)](#开发)
+[![Version](https://img.shields.io/badge/version-0.4.2-orange.svg)](CHANGELOG.md)
 
 ## 目录
 
@@ -167,10 +167,15 @@ tail -n 20 ~/.dsh/logs/target-monitor/gate-trace.jsonl | jq -c .
 | `session` | agent 标识的 8 位十六进制短哈希 |
 | `turn` | 轮次号；未知为 `-1` |
 | `outcome` | `injected` 或 `released` |
-| `reason` | `undeclared` / `declared` / `disabled` / `not-root` / `aborted` / `error` |
+| `reason` | 收尾门：`undeclared` / `declared` / `disabled` / `not-root` / `aborted` / `error`；上游续行：`upstream-resumed` / `upstream-skipped` / `upstream-capped` |
 | `attempt` | 本轮第几次注入；放行时为 `0` |
+| `degraded` | 仅在降级路径本地写入时出现；守护进程不可用期间的记录带这个键 |
 
 **某轮查不到记录，表示该轮未被判定。** 单文件超 2 MiB 轮转为 `.1`，保留两代。
+
+排查"怎么又收到提醒了"时，**以 `at` 为准，不要看消息到达时间**：注入投递到下一步，长轮次里它可能一直排在收件箱里，直到这一轮真正结束才出现在对话中。实测有一次判定发生在 17:39、提醒 19:11 才显示——照着到达时间去翻附近的记录，什么也找不到。
+
+另一条容易踩的：`injected` 之后紧跟一条同 `turn` 的 `released`/`declared` 是**正常回路**（提醒 → 模型补声明 → 放行），不代表门出问题。只有"同一轮多条 `injected` 且 `attempt` 不递增"才值得怀疑。
 
 记录只写文件与内存缓冲，不进入对话消息、系统提示词或工具返回值——工具结果必然进模型上下文，因此本项目不提供查询工具。
 
@@ -259,7 +264,7 @@ npm install
 bash scripts/link-host.sh   # 开发期链接宿主已安装的 @deepseek-ai 包
 
 npm run typecheck
-npm test                    # node --test，183 项
+npm test                    # node --test，197 项
 npm run build
 ```
 

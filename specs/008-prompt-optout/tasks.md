@@ -39,7 +39,7 @@
 
 - [x] T019 `npm run typecheck`（两个工程）通过
 - [x] T020 `npm run build` 产出 `dist/client.js`（11 518 字节）
-- [x] T021 `npm test` 195 项全通过
+- [x] T021 `npm test` 197 项全通过
 - [x] T022 真实实例 `dsh web --port 3097` 启动无 `entry did not activate`、无 `missing bundle`
 - [x] T023 确认宿主把本插件编进启动图：组合脚本内含 `id: "dsh-target-monitor"` 与 `settings.section`
 - [x] T024 在浏览器里实际打开「设置 → 目标监测」并逐项操作（隔离 profile + 临时实例 `--port 3099`）

@@ -11,9 +11,6 @@
 
 - **设置分区打开后一片空白**：客户端只注入了 `remote`，而 `ctx.remote` 是 typert 的远程代理，属性有独立访问门；渲染时读 `remote.settings` 抛出 `cannot get property "remote.settings" without inject`，宿主把整条 section 判为崩溃并撤下（导航项还在，内容区空）。现声明为 `inject = ['remote', 'remote.settings', 'slots']`，并加了两条针对产物 `inject` 与分区注册的回归测试——这个错误类型检查发现不了，只有真机渲染才暴露。
 - **`stallNoticeThreshold` 在设置页里读不到也写不进**：宿主只把 `.volatile()` 字段交给设置文档，该字段此前不是 volatile，`SettingsNamespaceView.value` 里根本没有这个键。现改为 volatile，八个字段全部可见可写。
-
-### Fixed（续）
-
 - **同一轮被无限重复注入**：守护进程的幂等缓存把 `turn-stopping` 也缓存了（键 `session:turn:type`）。门注入后宿主会再跑一步、同一轮再次收尾，第二次请求命中缓存又拿到 `inject: true`——注入、再注入，停不下来；而且缓存短路发生在分发之前，**连留痕都不写**，所以现场表现为"每轮都收到同一条 `attempt 1` 提醒、留痕文件零新增"。现改为只缓存副作用请求（`turn-start` / `declare` / `finish` / `dispose`），判定类请求一律重新执行。
 
 ### Changed

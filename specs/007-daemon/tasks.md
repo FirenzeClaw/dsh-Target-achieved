@@ -130,6 +130,7 @@ description: "Task list for 跨进程监测守护"
 - [x] T038 [P] 更新 `AGENTS.md`：目录结构加三个新目录，构建与运行补守护进程的验证命令，测试计数更新
 - [x] T039 [P] 更新 `CHANGELOG.md` 的 `[Unreleased]`，并在 `package.json` 升到 `0.3.0`
 - [x] T040 全量验证：`npm run typecheck && npm run build && npm test` 全绿；`npm pack` 后确认 `dist/daemon/main.js` 在包内；按 `quickstart.md` 跑完七个场景
+- [x] T041 发布后回归：**判定类请求不得进幂等缓存**（契约 C-008a）。0.3.0 上线后出现"同一轮无限重复注入"，根因是缓存键 `session:turn:type` 把 `turn-stopping` 也覆盖了；注入后宿主再跑一步、同一轮再次收尾时命中缓存拿回 `inject: true`，且短路发生在 dispatch 之前故不留痕。修复：只缓存 `turn-start`/`declare`/`finish`/`dispose`；用例「同一轮声明后再次收尾必须重新判定」先红后绿。发布 `0.4.2`。
 
 ---
 
