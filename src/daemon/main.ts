@@ -10,7 +10,7 @@
  * @module
  */
 import { createServer } from 'node:net'
-import { unlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { decodeMessage, encodeMessage, ERROR_CODES, isRequest, PROTOCOL_VERSION, type ClientMessage, type RequestMessage } from '../ipc/protocol.ts'
@@ -87,7 +87,8 @@ export function startDaemon(options: {
     graceTimer.unref()
   }
 
-  mkdirSync(dirname(options.socketPath), { recursive: true })
+  // 目录 0700、socket 0600：IPC 是本机的权限边界，同机其他用户不该能连上来写状态。
+  mkdirSync(dirname(options.socketPath), { recursive: true, mode: 0o700 })
   // 先清掉可能残留的 socket：走到这里说明调用方已确认无人监听，
   // 但 bind 仍会因为文件存在而 EADDRINUSE。
   try {
@@ -207,6 +208,13 @@ export function startDaemon(options: {
 
   server.listen(options.socketPath, () => {
     writeFileSync(options.pidPath, `${process.pid}\n`, { mode: 0o600 })
+    // Node 建 socket 时用的是 umask 决定的默认权限（常见 0775），
+    // 必须在 listen 之后显式收紧，否则同机其他用户可以连上来改状态。
+    try {
+      chmodSync(options.socketPath, 0o600)
+    } catch (error: unknown) {
+      console.warn('target-monitor: 收紧 socket 权限失败，继续以默认权限运行', error)
+    }
   })
   // 这里绝不能 unref：未 ref 的监听器不持有事件循环，进程会在 listen 后立刻退出。
 

@@ -189,6 +189,23 @@ test('协议版本不匹配时拒绝连接', async () => {
   }, /protocol mismatch rejected/)
 })
 
+test('socket 权限被收紧到 0600', async () => {
+  const { socketPath, daemon } = setup()
+  cleanups.push(() => {
+    daemon.close()
+  })
+  await waitForSocket(socketPath)
+
+  // 文件由 bind 创建、权限在 listen 回调里收紧，两者之间隔着一个 tick。
+  const { statSync } = await import('node:fs')
+  let mode = statSync(socketPath).mode & 0o777
+  for (let attempt = 0; attempt < 100 && mode !== 0o600; attempt += 1) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 10))
+    mode = statSync(socketPath).mode & 0o777
+  }
+  assert.equal(mode, 0o600, 'socket 必须是 0600：它是本机的权限边界')
+})
+
 test('最后一个连接断开后，宽限期到点即退出并清理文件', async () => {
   let exited = false
   const home = mkdtempSync(join(tmpdir(), 'tm-daemon-'))
