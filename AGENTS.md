@@ -19,6 +19,8 @@ DSH-Target-achieved/
 ├── README.md                  # 项目简介与入口
 ├── docs/
 │   └── PLUGIN-DESIGN.md       # 设计取舍 + 宿主事件面调研结论（事实来源）
+├── specs/
+│   └── 001-target-monitor/    # 收尾门特性：spec.md 与质量清单
 ├── .specify/                  # speckit 脚手架（templates / memory / scripts/bash）
 │   └── memory/constitution.md # 项目宪法（本仓库约束的权威来源）
 ├── .dsh/skills/               # speckit-* 技能（由 specify init 生成）
@@ -114,8 +116,8 @@ DSH-Target-achieved/
 ### 插件特有约束
 
 - 影响模型可见内容的操作只走日志通道（系统提示词章节 / `inject` / `steer` / 工具结果）
-- 所有注入必须带来源标记与原因，且受次数上限约束
-- 用户取消不得被自动复活
+- 所有注入必须带来源标记与原因，并受既定的预算策略约束（当前策略：不设硬上限，第 5 次向用户发出 notice）
+- 用户取消不得被自动复活；下一轮用户输入后自动恢复
 <!-- /AUTO:CONVENTIONS -->
 
 ## Git 约定
