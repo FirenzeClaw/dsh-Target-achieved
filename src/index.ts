@@ -16,6 +16,7 @@ import { DECLARATION_SECTION } from './prompt.ts'
 import { handleTurnStopping, type GateDeps } from './gate.ts'
 import { forget } from './state.ts'
 import { registerTargetStatus } from './tool.ts'
+import { forgetTurn, observeTurn, turnOf } from './turn.ts'
 
 export { Config }
 export type { TargetMonitorConfig }
@@ -27,9 +28,6 @@ export const inject = ['agents', 'tools', 'systemPrompt'] as const
 
 /** 章节排序：排在工具说明之后、不与 goal 策略段争位。 */
 const SECTION_ORDER = 900
-
-/** 每个 agent 的当前轮次号，供工具声明时对齐。 */
-const currentTurn = new WeakMap<Agent, number>()
 
 /** 每个 agent 最近一次 assistant 流所属的轮次（由 start 帧给出）。 */
 const streamTurn = new WeakMap<Agent, number>()
@@ -56,7 +54,7 @@ export function apply(ctx: Context, rawConfig: unknown): void {
     text: DECLARATION_SECTION,
   })
 
-  registerTargetStatus(ctx, (agent) => currentTurn.get(agent) ?? 0, () => config.enabled.get() !== false)
+  registerTargetStatus(ctx, turnOf, () => config.enabled.get() !== false)
 
   const gate: GateDeps = {
     // config 作为访问器传入：每次判定都读当前值，而不是 apply 时的快照。
@@ -71,7 +69,9 @@ export function apply(ctx: Context, rawConfig: unknown): void {
   }
 
   ctx.on('agent/turn-stopping', (payload) => {
-    currentTurn.set(payload.agent, payload.turn)
+    // 兜底写入：正常路径下 start 帧已经写过同一个值，这里覆盖成同值无害；
+    // 不走流式帧的路径（极早期失败轮）靠这里补齐轮次。
+    observeTurn(payload.agent, payload.turn)
 
     // 宿主在 abort/error 路径不会派发本钩子；这里再挡一次，取消绝不复活（FR-011）。
     if (payload.signal.aborted) return
@@ -96,6 +96,9 @@ export function apply(ctx: Context, rawConfig: unknown): void {
     const { frame } = payload
     // 轮次只在 start 帧上；chunk 帧没有 turn 字段。
     if (frame.type === 'start') {
+      // 这是声明能拿到正确轮次的关键：宿主在发起模型请求后、任何工具调用之前发出本帧。
+      // 若只依赖 turn-stopping（轮次结束）写入，一轮里的首次声明会落到上一轮的键上。
+      observeTurn(payload.agent, frame.turn)
       streamTurn.set(payload.agent, frame.turn)
       return
     }
@@ -111,6 +114,6 @@ export function apply(ctx: Context, rawConfig: unknown): void {
   ctx.on('agent/disposed', (payload) => {
     forget(payload.agent)
     forgetCause(payload.agent)
-    currentTurn.delete(payload.agent)
+    forgetTurn(payload.agent)
   })
 }

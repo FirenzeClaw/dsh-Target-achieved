@@ -36,11 +36,12 @@ function isDeclarable(state: unknown): state is Exclude<TargetState, 'working'> 
 /**
  * 注册 `target_status` 工具。
  * @param ctx - 插件上下文
- * @param turnOf - 读取该 agent 当前轮次号
+ * @param turnOf - 读取该 agent 当前轮次号；尚未观察到轮次时返回 undefined
+ * @param isEnabled - 设置页开关的实时读取
  */
 export function registerTargetStatus(
   ctx: Context,
-  turnOf: (agent: Agent) => number,
+  turnOf: (agent: Agent) => number | undefined,
   isEnabled: () => boolean,
 ): void {
   ctx.tools.register(defineTool({
@@ -76,6 +77,11 @@ export function registerTargetStatus(
       }
 
       const turn = turnOf(agent)
+      // 无轮次可归属时显式拒绝：写进哨兵键的声明永远不会被收尾判定读到，
+      // 症状与"声明无效"完全相同且更难归因（spec 002 / FR-006）。
+      if (turn === undefined) {
+        throw new Error('TARGET_STATUS_NO_TURN: no turn has been observed yet; retry after the next step starts.')
+      }
       declare(agent, turn, args.state)
       return Promise.resolve({ ok: true, turn, state: args.state })
     },
