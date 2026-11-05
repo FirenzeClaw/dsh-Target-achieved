@@ -87,8 +87,8 @@ DSH-Target-achieved/
 
 | 事件 | 模式 | 对本插件的意义 |
 |---|---|---|
-| `agent/turn-stopping` | serial，awaited | 轮次即将关闭（模型不再欠响应）。监听器可 `agent.steer()` 反对关闭，机器会重读 inbox 再跑一步——**这是唯一的"收尾前拦截点"** |
-| `agent/error` | emit | step/turn 出错，携带原始 error |
+| `agent/turn-stopping` | serial，awaited | 轮次即将关闭（模型不再欠响应）。监听器可 `agent.steer()` 反对关闭，机器会重读 inbox 再跑一步——**但只在正常收尾路径派发**（`dsh-agent-loop/lib/index.js:1001` 位于 try 内），错误路径不派发 |
+| `agent/error` | emit | step/turn 出错，携带原始 error；**取消路径不派发**（catch 命中 abort 分支直接 throw，不调 `throwError`，`index.js:1010-1016`）。上游续行挂在这里 |
 | `agent/request-error` | waterfall | 单次模型请求失败，返回 `{ kind: 'retry' }` 可接管重试——**上游不稳定的既有层，不要重复实现** |
 | `agent/status` | emit | `idle` ⇄ `running` |
 | `agent/pre-step` | waterfall | 可拒绝或用新消息替换即将进入步骤的批次 |
@@ -152,7 +152,7 @@ DSH-Target-achieved/
 ### 插件特有约束
 
 - 影响模型可见内容的操作只走日志通道（系统提示词章节 / `inject` / `steer` / 工具结果）
-- 所有注入必须带来源标记与原因，并受既定的预算策略约束（当前策略：不设硬上限，第 5 次向用户发出 notice）
+- 所有注入必须带来源标记与原因，并受既定的预算策略约束。当前有两条：收尾门的修复（不设硬上限，第 5 次向用户发 notice）与上游续行（`maxResumes`，默认 3 次，正常收尾清零）
 - 用户取消不得被自动复活；下一轮用户输入后自动恢复
 <!-- /AUTO:CONVENTIONS -->
 
