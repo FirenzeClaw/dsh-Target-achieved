@@ -75,6 +75,8 @@ export interface RequestMessage {
   aborted?: boolean
   isRoot?: boolean
   errorCode?: string
+  /** 上游错误是否可重试；仅 `upstream-error` 使用，由客户端分类后带上。 */
+  retryable?: boolean
 }
 
 /** 握手。 */

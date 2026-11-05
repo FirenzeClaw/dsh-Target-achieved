@@ -153,9 +153,20 @@ function sessionOf(agent: Agent): string {
 
   const rawId = (agent as { id?: unknown }).id
   const seed = typeof rawId === 'string' && rawId !== '' ? rawId : `anonymous-${(anonymousCount += 1)}`
-  const hashed = createHash('sha256').update(seed).digest('hex').slice(0, 8)
+  const hashed = hashSession(seed)
   sessions.set(agent, hashed)
   return hashed
+}
+
+/**
+ * 把原始会话标识哈希成 8 位短标识。
+ *
+ * 用哈希而不是原值，是为了避免把宿主生成的会话 id 直接写进磁盘日志。
+ * @param seed - 原始会话标识
+ * @returns 8 位十六进制短标识
+ */
+function hashSession(seed: string): string {
+  return createHash('sha256').update(seed).digest('hex').slice(0, 8)
 }
 
 /**
@@ -192,15 +203,39 @@ function appendLine(dir: string, line: string, maxBytes: number): void {
  * @param input - 判定的轮次、结果、原因与次数
  */
 export function recordTrace(agent: Agent, input: TraceInput): void {
+  writeEntry(sessionOf(agent), input, false)
+}
+
+/**
+ * 按原始会话标识写留痕（守护进程用）。
+ *
+ * 哈希方式与 `sessionOf` 一致，因此同一个会话在客户端写与在守护进程写，
+ * 落盘后的 `session` 字段相同——不然事后按会话聚合会漏掉一半记录。
+ * @param rawSessionId - 原始会话标识（宿主给的 `SessionId`）
+ * @param input - 判定内容
+ * @param degraded - 是否由降级路径本地写入
+ */
+export function recordTraceForSession(rawSessionId: string, input: TraceInput, degraded: boolean): void {
+  writeEntry(hashSession(rawSessionId), input, degraded)
+}
+
+/**
+ * 把一条判定写成留痕并落盘。
+ * @param hashedSession - 已哈希的会话标识
+ * @param input - 判定内容
+ * @param degraded - 是否降级写入
+ */
+function writeEntry(hashedSession: string, input: TraceInput, degraded: boolean): void {
   const entry: GateTraceEntry = {
     at: Date.now(),
-    session: sessionOf(agent),
+    session: hashedSession,
     turn: input.turn,
     outcome: input.outcome,
     reason: input.reason,
     attempt: input.attempt,
     // 条件展开：缺省时不写这个键，保持老记录的字段集合不变。
     ...(input.errorCode === undefined ? {} : { errorCode: input.errorCode }),
+    ...(degraded ? { degraded: true } : {}),
   }
 
   buffer.push(entry)
