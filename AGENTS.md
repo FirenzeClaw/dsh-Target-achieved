@@ -84,6 +84,15 @@ DSH-Target-achieved/
 
 > **排查注入时要看留痕的 `at`，不要看消息到达时间。** 注入投递到下一步，长轮次里它可能一直排在 inbox 里，等这一轮真正结束才出现在对话里。实测一次 turn 42 的判定发生在 17:39:42，提醒直到 19:11 才显示——期间我误以为是"刚刚这轮又被拦了"。判定是否发生、判定的是哪一轮，只以 `~/.dsh/logs/target-monitor/gate-trace.jsonl` 的 `at`/`turn` 为准。
 
+> **[UNCERTAIN] 未解决观察：收尾门疑似重复投递同一条提醒（2026-11-05 19:11–19:15）。**
+> 现象：同一会话在已调用 `target_status("done")` 后仍连续收到同一段 `undeclared` 提醒，每次都是 `attempt 1`。
+> 证据：`~/.dsh/logs/target-monitor/gate-trace.jsonl` 中该会话（`e5e88da7`）只有 **一条** 记录，时间 17:39:42；
+> 19:11 与 19:13 两次提醒**没有任何新留痕**；`ss -xp | grep target-monitor.sock` 显示 3080 进程确实连着守护进程（走的是远程路径），
+> 而守护进程（pid 677513，17:37 启动）仍在运行。
+> 因此"门又判了一次"这个解释与证据不符：更像是 **17:39 那次注入的消息在 inbox 里被反复投递**，或投递后未被消费。
+> 下一步取证方向：在 `deliver()` 前后加一次性日志（宿主 inbox 的插入/领取事件 `agent/inbox/*` 已可订阅），确认是同一条消息被重复领取，
+> 还是每次收尾都真的新注入一条。**在弄清之前，不要把"又收到提醒"当成"这一轮又被判定未声明"。**
+
 **守护进程实测（2026-11-05）**：单次 RPC 0.13 毫秒（500 次平均）；空闲 RSS 51 MiB、2000 次请求后 58 MiB；socket 权限 0600、`run/` 目录 0700。这些数字写在 README「开销」与 `specs/007-daemon/plan.md`，改动实现后需重测。
 
 **发布**：npm 与 git 双通道，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`。`package.json` 含 `dsh.manifestVersion: 1` + `dsh.bundle.patch`，支持 bundle / git / 本地 link 三种安装方式。
