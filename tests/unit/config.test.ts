@@ -30,6 +30,22 @@ test('enabled 为 false 时引用读出 false', () => {
   assert.equal(resolveConfig({ enabled: false }).enabled.get(), false)
 })
 
+test('宿主已解析的配置（enabled 是 volatile 引用）不得再跑一遍 schema', () => {
+  // 回归：cordis 先用导出的 Config 解析，再把结果传给 apply；若 apply 里再校验一次，
+  // volatile 引用会被当成布尔值，抛 `$.enabled expected boolean but got [object Object]`，
+  // 插件整条 entry 变成 inactive，target_status 根本不进工具池。
+  const enabled = Object.freeze({ get: () => false })
+  const config = resolveConfig({ enabled, stallNoticeThreshold: 3 })
+  assert.equal(config.enabled, enabled, '必须原样保留宿主给的引用')
+  assert.equal(config.enabled.get(), false)
+  assert.equal(config.stallNoticeThreshold, 3)
+})
+
+test('已解析路径下的非法阈值仍然抛出', () => {
+  const enabled = Object.freeze({ get: () => true })
+  assert.throws(() => resolveConfig({ enabled, stallNoticeThreshold: 0 }), /stallNoticeThreshold/)
+})
+
 test('snapshot 把 volatile 引用拍平为普通值', () => {
   assert.deepEqual(snapshot(resolveConfig({ enabled: false, stallNoticeThreshold: 3 })), {
     enabled: false,
