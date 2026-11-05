@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node10",
+    "outDir": "dist/client-raw",
+    "rootDir": "src/client",
+    "declaration": false,
+    "sourceMap": false,
+    "verbatimModuleSyntax": false,
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": false,
+    "types": []
+  },
+  "include": ["src/client/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

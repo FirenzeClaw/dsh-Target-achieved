@@ -20,25 +20,30 @@
     "manifestVersion": 1,
     "bundle": {
       "patch": "dsh.bundle.patch"
+    },
+    "client": {
+      "platform": "web"
     }
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./client": "./dist/client.js"
   },
   "files": [
     "dist",
     "dsh.bundle.patch",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "scripts/build-client.mjs"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs",
     "test": "node --test",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.5",

@@ -109,19 +109,26 @@ export function apply(ctx: Context, rawConfig: unknown): void {
 
   // 不在这里 `if (!config.enabled) return`：enabled 是 volatile，用户随时可在设置页关掉，
   // 关掉后必须立刻停止注入。若启动时就 return，开关会变成"改了没反应"。
-  ctx.systemPrompt.section({
-    name: 'tool:target-monitor',
-    order: SECTION_ORDER,
-    text: DECLARATION_SECTION,
-  })
+  //
+  // declarationSection 不同：它决定是否注册章节与工具，而注册是静态的、无法在运行中撤销，
+  // 所以它只在启动时读一次，改了要重启才生效（设置页的说明里写明了这一点）。
+  const sectionEnabled = config.declarationSection.get() !== false
 
-  registerTargetStatus(
-    ctx,
-    turnOf,
-    () => config.enabled.get() !== false,
-    // 声明走判定通道：远程时由守护进程计数，本地时落到进程内状态。
-    (agent, turn, state) => { void monitor.declare(agent, turn, state) },
-  )
+  if (sectionEnabled) {
+    ctx.systemPrompt.section({
+      name: 'tool:target-monitor',
+      order: SECTION_ORDER,
+      text: DECLARATION_SECTION,
+    })
+
+    registerTargetStatus(
+      ctx,
+      turnOf,
+      () => config.enabled.get() !== false,
+      // 声明走判定通道：远程时由守护进程计数，本地时落到进程内状态。
+      (agent, turn, state) => { void monitor.declare(agent, turn, state) },
+    )
+  }
 
   /**
    * 投递一条自救提醒。
@@ -144,6 +151,9 @@ export function apply(ctx: Context, rawConfig: unknown): void {
 
     // 宿主在 abort/error 路径不会派发本钩子；这里再挡一次，取消绝不复活（FR-011）。
     if (payload.signal.aborted) return
+
+    // 没有声明通道就没有可满足的条件：此时注入只会催促模型做一件它做不到的事。
+    if (!sectionEnabled) return
 
     // 降级：若从未收到过任何 finish 帧，说明 assistant-stream 契约不可用，
     // 此时所有轮次都会按 undeclared 处理；只提示一次，避免刷屏。
@@ -209,6 +219,9 @@ export function apply(ctx: Context, rawConfig: unknown): void {
    * @param input - 事件负载中的 agent、轮次与错误
    */
   function scheduleResume(input: { agent: Agent; turn: number; error: unknown }): void {
+    // 续行投递的正文是「去声明」的提醒；声明通道关着时它同样无从满足。
+    if (!sectionEnabled) return
+
     const { agent, turn, error } = input
     const errorCode = errorCodeOf(error)
     const retryable = classifyUpstreamError(error) === 'retryable'
