@@ -1,0 +1,41 @@
+# Changelog
+
+本项目的所有重要变更都记录在此文件。
+
+格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
+版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+## [Unreleased]
+
+暂无。
+
+## [0.1.0] - 2026-11-05
+
+首个正式发布。此前 22 个提交为开发期提交，不单独成版。
+
+### Added
+
+- **收尾门**：轮次关闭前检查目标状态声明，未声明则注入自救提醒并让轮次继续。
+- **`target_status` 工具**：`done` / `awaiting_user` 两种声明，作为唯一判定依据。
+- **两种结束原因**：区分普通收尾与 `max-tokens` 截断，后者说明截断后的工具调用未执行。
+- **卡住提示**：同一轮第 5 次未声明时向用户提示一次，阈值可配置。
+- **跨轮复述**（spec 005）：按 agent 累计"遗忘"次数（注入后 30 秒内声明计一次），达阈值后下一次提醒追加声明规范复述，发完清零。真中断不计数也不清零。
+- **判定留痕**（spec 004）：每次判定写一条 JSONL（`~/.dsh/logs/target-monitor/gate-trace.jsonl`），放行也记，六种原因可区分；单文件超 2 MiB 轮转，保留两代。
+- **设置页**：`enabled` / `reminderThreshold` / `reactionWindowMs` 声明为 volatile，改动即时生效。
+- **三种安装方式**：bundle（`dsh.manifestVersion` + `dsh.bundle.patch`）、git 源、本地 link。
+- **MIT 许可**：补齐 `LICENSE` 全文，`package.json` 与分发文件一致。
+
+### Fixed
+
+- **配置二次校验导致插件整条 entry inactive**：宿主先用插件导出的 `Config` 解析配置，`apply` 又跑了一遍 schema，volatile 的 `enabled` 被当作布尔值校验。改为先识别"已解析"形态再复核数值。
+- **声明写到错误的轮次键**（spec 002）：轮次只在 `turn-stopping`（轮次结束时）写入，工具却在轮次中途读取，导致一轮里的首次声明落到上一轮。写入点前移到 `assistant-stream` 的 `start` 帧。
+- **系统提示词章节序号撞号**：`SECTION_ORDER` 曾为 900，与宿主 `FILE_REFERENCE` 撞号，章节被排进 `AGENTS.md` 正文中间。改为 2500（goal 段之后、workflow 段之前）。
+- **工具返回值暴露轮次**：`target_status` 曾返回 `turn`，诱导模型推理轮次编号。改为只返回 `{ ok, state }`。
+- **测试污染真实日志目录**：集成测试驱动真实 `apply` 时会把假记录写进 `~/.dsh/logs/`。改为在 `node --test` 进程内默认不落盘。
+
+### Changed
+
+- 系统提示词中的声明协议改为"先声明，再汇报 / 先声明，再提问"的顺序表述——只说"收尾前要声明"时，模型倾向于先写完汇报再补声明，那时轮次已经要关闭。
+
+[Unreleased]: https://github.com/FirenzeClaw/dsh-Target-achieved/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/FirenzeClaw/dsh-Target-achieved/releases/tag/v0.1.0

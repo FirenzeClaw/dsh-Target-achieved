@@ -77,3 +77,14 @@ test('许可文件存在且被 files 收录（声明 MIT 就必须真的给出�
   assert.match(text, /^MIT License/)
   assert.match(text, /THE SOFTWARE IS PROVIDED "AS IS"/, '必须是完整的 MIT 免责条款')
 })
+
+test('版本与变更记录一致（引入版本号后必须同步维护）', () => {
+  const version = String(manifest['version'])
+  assert.match(version, /^\d+\.\d+\.\d+$/, '必须使用语义化版本')
+
+  const changelogPath = join(root, 'CHANGELOG.md')
+  assert.ok(existsSync(changelogPath), '引入版本号后必须有 CHANGELOG')
+  const changelog = readFileSync(changelogPath, 'utf8')
+  assert.match(changelog, new RegExp(`## \\[${version.replaceAll('.', '\\.')}\\]`), '当前版本必须在 CHANGELOG 中有条目')
+  assert.ok((manifest['files'] as string[]).includes('CHANGELOG.md'))
+})

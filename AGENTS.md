@@ -16,7 +16,8 @@
 ```
 DSH-Target-achieved/
 ├── AGENTS.md                  # 本文件：项目级上下文
-├── README.md                  # 项目简介与入口
+├── README.md                  # 面向使用者的入口（GitHub 结构：背景/安装/配置/范围声明/许可）
+├── CHANGELOG.md               # Keep a Changelog 格式；版本号与 package.json 一致
 ├── package.json               # ESM 包；peer 依赖由宿主提供
 ├── LICENSE                    # MIT 许可全文（package.json 声明 MIT，必须真有此文件）
 ├── dsh.bundle.patch           # bundle 补丁：只做 insert，不改宿主既有条目
@@ -61,7 +62,9 @@ DSH-Target-achieved/
 - 测试：`npm test` → `node --test`（Node 24 原生类型剥离，零测试框架依赖）
 - 挂载：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
 
-**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 97 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 98 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+
+**版本**：`0.1.0`（首个正式发布，tag `v0.1.0`）。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
 
 **发布**：npm 与 git 双通道，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`。`package.json` 含 `dsh.manifestVersion: 1` + `dsh.bundle.patch`，支持 bundle / git / 本地 link 三种安装方式。
 
@@ -158,13 +161,17 @@ DSH-Target-achieved/
 - 分支：`feature/` `fix/` `chore/` `refactor/` 前缀，短命分支（1-3 天），main 始终可部署
 - 提交前：`git status` + 完整 `git diff` 自查 → 查密钥（password/secret/api_key/token）→ 跑测试与类型检查
 
-## 对外承诺（写进 README，改动需同步）
+## 对外声明（写进 README，改动需同步）
 
-本项目是**减损装置，不是正确性保证**。三条对外表述不得被夸大为更强的承诺：
+README 的「范围声明」与「能力声明」两节是事实陈述，不是免责条款。改写时保持陈述语气（"插件判定 X"、"插件不读取 Y"），不要退化成"不承担任何责任"式的法律话术——那既不增加信息，又让人读不出真实边界。
 
-1. 只判定"收尾时有没有显式声明目标状态"，不判定任务是否真的完成；模型错误声明 `done` 时照常放行。
-2. 注入可能被忽略，同一轮不设硬上限；保证的是"不静默放行"，不是"一定会继续"。
-3. 依赖宿主内部事件契约（按 `0.2.1-rc.5` 核实），宿主升级后需复核。
+五条事实：
+
+1. 插件判定的是"收尾时有没有调用过 `target_status`"；任务是否真的完成由模型判断。模型在未完成时声明 `done`，插件放行。
+2. 注入是提醒，不是命令。模型可以忽略它继续收尾；同一轮会再次注入，不设硬上限（第 5 次向用户发一次提示）。
+3. 判定依据是宿主事件（`agent/turn-stopping`、`agent/assistant-stream`），按 `0.2.1-rc.5` 的契约实现。
+4. 用户取消轮次后不再注入，也不复活该轮；下一次用户输入恢复门控。
+5. 留痕是旁路：写盘失败时插件继续判定与注入，只告警一次。
 
 **开销**（README「开销」节有实测数字）：系统提示词章节 433 字符/轮；提醒 647 字符/次；复述 306 字符，每累计 3 次遗忘出现一次。真实成本是"可能多一轮"，实测注入响应中位数约 9.6 秒。
 
