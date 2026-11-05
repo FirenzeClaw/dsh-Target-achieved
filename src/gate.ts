@@ -13,6 +13,7 @@ import { noteInjection, takeReminderDue } from './forget.ts'
 import { noticeSummary } from './notices.ts'
 import { REMINDER_TEXT, repairText, stallNoticeText } from './prompt.ts'
 import { bumpRepair, isDeclared, latchOf, markNoticeShown } from './state.ts'
+import type { GateReason, TraceInput } from './trace.ts'
 
 /** 门依赖的最小上下文面，便于单测替换宿主。 */
 export interface GateDeps {
@@ -24,6 +25,8 @@ export interface GateDeps {
   deliver(agent: Agent, text: string, summary: string): void
   /** 当前时刻；测试可注入固定时钟。 */
   now?(): number
+  /** 判定留痕；缺席时不留痕（纯单元测试）。 */
+  trace?(agent: Agent, entry: TraceInput): void
 }
 
 /**
@@ -34,16 +37,26 @@ export interface GateDeps {
  * @returns 是否拒绝了关闭（即是否注入了提醒）
  */
 export function handleTurnStopping(deps: GateDeps, agent: Agent, turn: number): boolean {
+  const released = (reason: GateReason): false => {
+    // 放行也留痕：只有"查不到记录"才代表该轮未被判定。曾因放行无声，
+    // 把"插件没运行"误判成"首轮不判定"（spec 004 / FR-001）。
+    deps.trace?.(agent, { turn, outcome: 'released', reason, attempt: 0 })
+    return false
+  }
+
   const config = deps.config()
-  if (!config.enabled) return false
+  if (!config.enabled) return released('disabled')
 
-  if (!deps.isRoot(agent)) return false
+  if (!deps.isRoot(agent)) return released('not-root')
 
-  const cause = classify(finishOf(agent, turn))
+  const finish = finishOf(agent, turn)
+  const cause = classify(finish)
   // 取消/错误不该走到这里；真走到了也绝不复活。
-  if (cause === 'not-applicable') return false
+  if (cause === 'not-applicable') {
+    return released(finish?.kind === 'aborted' ? 'aborted' : 'error')
+  }
 
-  if (isDeclared(agent, turn)) return false
+  if (isDeclared(agent, turn)) return released('declared')
 
   const now = deps.now?.() ?? Date.now()
   // 先登记本次注入：下一次声明若落在反应窗口内，就会被计为一次"遗忘"。
@@ -67,5 +80,6 @@ export function handleTurnStopping(deps: GateDeps, agent: Agent, turn: number): 
   if (needsStallNotice) parts.push(stallNoticeText(config.stallNoticeThreshold))
 
   deps.deliver(agent, parts.join('\n\n'), noticeSummary(turn, cause, attempt))
+  deps.trace?.(agent, { turn, outcome: 'injected', reason: 'undeclared', attempt })
   return true
 }

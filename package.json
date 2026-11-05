@@ -4,7 +4,24 @@
   "description": "DeepSeek-Harness 收尾门：任务未声明完成时自动注入自救提醒，避免静默中断",
   "type": "module",
   "license": "MIT",
-  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/FirenzeClaw/dsh-Target-achieved.git"
+  },
+  "homepage": "https://github.com/FirenzeClaw/dsh-Target-achieved",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "target-status",
+    "turn-gate",
+    "agent-harness"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "dsh.bundle.patch"
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -12,7 +29,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "dsh.bundle.patch",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -32,6 +51,7 @@
     "typescript": "^5.7.3"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
   }
 }

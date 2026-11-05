@@ -10,6 +10,7 @@ import { recordFinish } from '../../src/cause.ts'
 import type { TargetMonitorConfig } from '../../src/config.ts'
 import { handleTurnStopping, type GateDeps } from '../../src/gate.ts'
 import { declare, latchOf } from '../../src/state.ts'
+import type { TraceInput } from '../../src/trace.ts'
 
 const asAgent = () => ({ id: 'a' }) as unknown as Agent
 
@@ -177,4 +178,82 @@ test('volatile 开关：判定时禁用即不再注入（热生效）', () => {
   enabled = false
   assert.equal(handleTurnStopping(deps, agent, 1), false, '关闭后必须立刻停止注入')
   assert.equal(delivered.length, 1)
+})
+
+const baseConfig: TargetMonitorConfig = {
+  enabled: true,
+  stallNoticeThreshold: 5,
+  reminderThreshold: 3,
+  reactionWindowMs: 30_000,
+}
+
+/** 收集留痕的固定装置。 */
+function traceHarness(config: TargetMonitorConfig = baseConfig, root = true) {
+  const traces: TraceInput[] = []
+  const deps: GateDeps = {
+    config: () => config,
+    isRoot: () => root,
+    deliver: () => undefined,
+    trace: (_agent, entry) => traces.push(entry),
+  }
+  return { deps, traces }
+}
+
+test('留痕：已声明 → released/declared', () => {
+  const agent = asAgent()
+  declare(agent, 1, 'done')
+  const h = traceHarness()
+
+  assert.equal(handleTurnStopping(h.deps, agent, 1), false)
+  assert.deepEqual(h.traces, [{ turn: 1, outcome: 'released', reason: 'declared', attempt: 0 }])
+})
+
+test('留痕：配置关闭 → released/disabled', () => {
+  const agent = asAgent()
+  finish(agent, 1, 'stop')
+  const h = traceHarness({ ...baseConfig, enabled: false })
+
+  handleTurnStopping(h.deps, agent, 1)
+  assert.equal(h.traces[0]?.reason, 'disabled')
+})
+
+test('留痕：非顶层 → released/not-root', () => {
+  const agent = asAgent()
+  finish(agent, 1, 'stop')
+  const h = traceHarness(baseConfig, false)
+
+  handleTurnStopping(h.deps, agent, 1)
+  assert.equal(h.traces[0]?.reason, 'not-root')
+})
+
+test('留痕：取消 → released/aborted', () => {
+  const agent = asAgent()
+  recordFinish(agent, 1, { kind: 'aborted' } as FinishReason)
+  const h = traceHarness()
+
+  handleTurnStopping(h.deps, agent, 1)
+  assert.equal(h.traces[0]?.reason, 'aborted')
+})
+
+test('留痕：错误 → released/error', () => {
+  const agent = asAgent()
+  recordFinish(agent, 1, { kind: 'error' } as FinishReason)
+  const h = traceHarness()
+
+  handleTurnStopping(h.deps, agent, 1)
+  assert.equal(h.traces[0]?.reason, 'error')
+})
+
+test('留痕：未声明注入 → injected/undeclared，且带本轮次数', () => {
+  const agent = asAgent()
+  finish(agent, 1, 'stop')
+  const h = traceHarness()
+
+  handleTurnStopping(h.deps, agent, 1)
+  handleTurnStopping(h.deps, agent, 1)
+
+  assert.deepEqual(
+    h.traces.map((t) => [t.outcome, t.reason, t.attempt]),
+    [['injected', 'undeclared', 1], ['injected', 'undeclared', 2]],
+  )
 })

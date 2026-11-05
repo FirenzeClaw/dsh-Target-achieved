@@ -23,6 +23,8 @@ DSH-Target-achieved/
 │   ├── index.ts               # 入口：注册章节 / 工具 / 事件
 │   ├── config.ts              # 配置校验（非法值抛出）
 │   ├── state.ts               # (agent, turn) → 目标状态
+│   ├── forget.ts              # 跨轮遗忘计数（复述触发）
+│   ├── trace.ts               # 判定留痕（JSONL + 环形缓冲）
 │   ├── cause.ts               # FinishReason → StopCause
 │   ├── gate.ts                # 收尾门判定与注入策略
 │   ├── tool.ts                # target_status 工具
@@ -37,7 +39,9 @@ DSH-Target-achieved/
 │   └── PLUGIN-DESIGN.md       # 设计取舍 + 宿主事件面调研结论（事实来源）
 ├── specs/
 │   ├── 001-target-monitor/    # 收尾门特性：spec / plan / tasks / contracts
-│   └── 002-turn-key-alignment/ # 轮次键对齐：声明与判定共用同一轮次
+│   ├── 002-turn-key-alignment/ # 轮次键对齐：声明与判定共用同一轮次
+│   ├── 004-observability-and-packaging/  # 留痕 / 设置页 / 可分发
+│   └── 005-declaration-reminder/         # 声明规范复述
 ├── .specify/                  # speckit 脚手架
 │   └── memory/constitution.md # 项目宪法（v1.1.0）
 └── .dsh/skills/               # speckit-* 技能
@@ -55,7 +59,9 @@ DSH-Target-achieved/
 - 测试：`npm test` → `node --test`（Node 24 原生类型剥离，零测试框架依赖）
 - 挂载：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
 
-**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 53 项全通过。真实加载器已能挂载插件（`target_status` 进入工具注册表、启动无 inactive 告警）；轮次收尾门已在真实会话验证：turn 3–5、7 未声明均注入 `#1`，turn 6 声明 `awaiting_user` 后放行，turn 1 取消（`aborted`）不复活。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 95 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+
+**发布**：npm 与 git 双通道，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`。`package.json` 含 `dsh.manifestVersion: 1` + `dsh.bundle.patch`，支持 bundle / git / 本地 link 三种安装方式。
 
 > 2026-11-05 修复两处：① `apply` 会对宿主已解析的配置重跑 `Config`，volatile 的 `enabled` 被当成布尔值校验，插件整条 entry 变 inactive（见 `src/config.ts` 的 `isVolatileRef`）；② 声明曾写到上一轮的键上（spec 002），轮次来源已统一到 `src/turn.ts`，写入点在 `assistant-stream` 的 `start` 帧。
 

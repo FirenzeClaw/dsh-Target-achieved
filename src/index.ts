@@ -17,6 +17,7 @@ import { DECLARATION_SECTION } from './prompt.ts'
 import { handleTurnStopping, type GateDeps } from './gate.ts'
 import { forget } from './state.ts'
 import { registerTargetStatus } from './tool.ts'
+import { configureTrace, recordTrace } from './trace.ts'
 import { forgetTurn, observeTurn, turnOf } from './turn.ts'
 
 export { Config }
@@ -53,6 +54,10 @@ let warnedNoStream = false
 export function apply(ctx: Context, rawConfig: unknown): void {
   const config = resolveConfig(rawConfig)
 
+  // 留痕默认写到 $DSH_HOME/logs/target-monitor/；此处显式配置一次，
+  // 让路径解析与上限在插件生命周期内固定（不逐条重算）。
+  configureTrace({})
+
   // 不在这里 `if (!config.enabled) return`：enabled 是 volatile，用户随时可在设置页关掉，
   // 关掉后必须立刻停止注入。若启动时就 return，开关会变成"改了没反应"。
   ctx.systemPrompt.section({
@@ -78,6 +83,10 @@ export function apply(ctx: Context, rawConfig: unknown): void {
       // FR-017：队首优先。空队列走 steer（会唤醒驱动）；非空则显式 prepend。
       if (agent.inbox.nextStep.length === 0) agent.steer(message)
       else agent.inbox.prepend('next-step', message)
+    },
+    trace(agent, entry) {
+      // 留痕是旁路：recordTrace 内部吞掉 I/O 异常，绝不会让门失败（FR-007）。
+      recordTrace(agent, entry)
     },
   }
 
