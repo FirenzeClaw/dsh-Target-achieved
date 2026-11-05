@@ -1,0 +1,13 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 日志与本地环境
+*.log
+.env
+.env.*
+
+# 编辑器
+.vscode/
+.idea/
