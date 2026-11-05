@@ -46,6 +46,12 @@ npm run typecheck && npm test && npm run build
 
 配置非法值会在启动时抛出，不会静默回退。
 
+### 设置页
+
+`enabled` 声明为 **volatile**，因此会出现在宿主的插件设置页里，改动后**立即生效**（不重挂载）。插件在每次收尾判定时读取当前值，关闭后立刻停止注入——不存在"改了没反应"的假开关。
+
+`stallNoticeThreshold` 目前**不在设置页暴露**，只能通过 `cordis.patch.yml` 修改：它参与告警节奏，热改语义尚未验证，待真实会话验证后再开放。
+
 ## 当前状态
 
 **M1 已实现**：`src/` 8 个模块、`tests/` 43 项测试全通过、`typecheck` 与 `build` 均通过。

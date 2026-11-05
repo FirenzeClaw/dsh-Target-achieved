@@ -15,7 +15,8 @@ import { bumpRepair, isDeclared, latchOf, markNoticeShown } from './state.ts'
 
 /** 门依赖的最小上下文面，便于单测替换宿主。 */
 export interface GateDeps {
-  readonly config: TargetMonitorConfig
+  /** 每次判定时读取当前配置；volatile 开关必须即时生效。 */
+  config(): TargetMonitorConfig
   /** 该 agent 是否为顶层；只有顶层受门控。 */
   isRoot(agent: Agent): boolean
   /** 投递一条提醒；由宿主实现（steer / prepend）。 */
@@ -30,6 +31,9 @@ export interface GateDeps {
  * @returns 是否拒绝了关闭（即是否注入了提醒）
  */
 export function handleTurnStopping(deps: GateDeps, agent: Agent, turn: number): boolean {
+  const config = deps.config()
+  if (!config.enabled) return false
+
   if (!deps.isRoot(agent)) return false
 
   const cause = classify(finishOf(agent, turn))
@@ -44,11 +48,11 @@ export function handleTurnStopping(deps: GateDeps, agent: Agent, turn: number): 
   // 阈值提示与修复提醒合并成一条消息：若分两条投递，第二条会被"队列非空则 prepend"
   // 的策略顶到队首，用户提示反而排在修复提示之前——顺序颠倒。
   const latch = latchOf(agent, turn)
-  const needsStallNotice = !latch.noticeShown && attempt >= deps.config.stallNoticeThreshold
+  const needsStallNotice = !latch.noticeShown && attempt >= config.stallNoticeThreshold
   if (needsStallNotice) markNoticeShown(agent, turn)
 
   const text = needsStallNotice
-    ? `${repair}\n\n${stallNoticeText(deps.config.stallNoticeThreshold)}`
+    ? `${repair}\n\n${stallNoticeText(config.stallNoticeThreshold)}`
     : repair
 
   deps.deliver(agent, text, noticeSummary(turn, cause, attempt))

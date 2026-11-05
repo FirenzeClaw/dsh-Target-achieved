@@ -4,11 +4,11 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveConfig } from '../../src/config.ts'
+import { resolveConfig, snapshot } from '../../src/config.ts'
 
-test('空配置使用默认值', () => {
+test('空配置使用默认值（enabled 为 volatile 引用）', () => {
   const config = resolveConfig({})
-  assert.equal(config.enabled, true)
+  assert.equal(config.enabled.get(), true)
   assert.equal(config.stallNoticeThreshold, 5)
 })
 
@@ -26,6 +26,13 @@ test('阈值 0 / 负数 / 非整数 / 非数字都抛出，且错误信息含字
   }
 })
 
-test('enabled 为 false 时保持 false', () => {
-  assert.equal(resolveConfig({ enabled: false }).enabled, false)
+test('enabled 为 false 时引用读出 false', () => {
+  assert.equal(resolveConfig({ enabled: false }).enabled.get(), false)
+})
+
+test('snapshot 把 volatile 引用拍平为普通值', () => {
+  assert.deepEqual(snapshot(resolveConfig({ enabled: false, stallNoticeThreshold: 3 })), {
+    enabled: false,
+    stallNoticeThreshold: 3,
+  })
 })

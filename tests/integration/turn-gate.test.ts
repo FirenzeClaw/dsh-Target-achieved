@@ -50,7 +50,7 @@ function fakeAgent(): FakeAgent {
 
 function deps(): GateDeps {
   return {
-    config: { enabled: true, stallNoticeThreshold: 5 },
+    config: () => ({ enabled: true, stallNoticeThreshold: 5 }),
     isRoot: () => true,
     deliver(agent, text, summary) {
       const message = createNotice(text, summary)

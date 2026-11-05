@@ -28,7 +28,7 @@ function harness(overrides: Partial<TargetMonitorConfig> = {}, root = true): Har
   return {
     delivered,
     deps: {
-      config,
+      config: () => config,
       isRoot: () => root,
       deliver: (_agent, text, summary) => {
         delivered.push({ text, summary })
@@ -155,4 +155,24 @@ test('不解析正文：即便文本里有 DONE 字样，未调用工具仍注�
   // 门只看闩锁；这里没有任何声明，因此必然注入。
   assert.equal(handleTurnStopping(h.deps, agent, 1), true)
   assert.equal(h.delivered.length, 1)
+})
+
+test('volatile 开关：判定时禁用即不再注入（热生效）', () => {
+  const agent = asAgent()
+  finish(agent, 1, 'stop')
+
+  let enabled = true
+  const delivered: string[] = []
+  const deps: GateDeps = {
+    config: () => ({ enabled, stallNoticeThreshold: 5 }),
+    isRoot: () => true,
+    deliver: (_a, text) => { delivered.push(text) },
+  }
+
+  assert.equal(handleTurnStopping(deps, agent, 1), true)
+  assert.equal(delivered.length, 1)
+
+  enabled = false
+  assert.equal(handleTurnStopping(deps, agent, 1), false, '关闭后必须立刻停止注入')
+  assert.equal(delivered.length, 1)
 })

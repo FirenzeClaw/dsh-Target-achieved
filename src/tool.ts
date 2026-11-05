@@ -38,7 +38,11 @@ function isDeclarable(state: unknown): state is Exclude<TargetState, 'working'> 
  * @param ctx - 插件上下文
  * @param turnOf - 读取该 agent 当前轮次号
  */
-export function registerTargetStatus(ctx: Context, turnOf: (agent: Agent) => number): void {
+export function registerTargetStatus(
+  ctx: Context,
+  turnOf: (agent: Agent) => number,
+  isEnabled: () => boolean,
+): void {
   ctx.tools.register(defineTool({
     name: 'target_status',
     description: DESCRIPTION,
@@ -56,6 +60,9 @@ export function registerTargetStatus(ctx: Context, turnOf: (agent: Agent) => num
     },
     output: OUTPUT,
     execute(args, exec) {
+      if (!isEnabled()) {
+        throw new Error('TARGET_STATUS_DISABLED: target monitor is disabled in settings.')
+      }
       const agent = exec.agent
       // exec.agent 是可选字段：没有 agent 的调用（例如直接 tools.execute）无处声明。
       if (agent === undefined) {
