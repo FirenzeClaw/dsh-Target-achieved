@@ -42,7 +42,7 @@
 | IV 原子提交 | 规格、实现、文档分三次提交 | 通过 |
 | V 不审查不合并 | 触碰轮次边界与注入面，必须过安全轴并做反向验证 | 通过 |
 | VI 显式契约 | 预算与分类写成 contracts；`ResumeState` 显式类型 | 通过 |
-| VII 复用宿主机制 | **关键**：不碰 `agent/request-error`（那是 `dsh-llm-retry` 的地盘），只在其之后补轮次级恢复；与 `dsh-goal-round-driver` 的仲裁见 research R-006 | 通过 |
+| VII 复用宿主机制 | **关键**：不碰 `agent/request-error`（那是 `dsh-llm-retry` 的地盘），只在其之后补轮次级恢复；与 `dsh-goal-round-driver` 的仲裁见 research R-005 | 通过 |
 
 **Gate 结论**：通过，无违反项需要豁免。
 

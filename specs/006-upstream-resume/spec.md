@@ -47,7 +47,7 @@
 **Acceptance Scenarios**:
 
 1. **Given** 轮次因 `AUTH` 结束，**When** 进入 idle，**Then** 不投递续行提醒。
-2. **Given** 用户在轮次执行中取消，**When** 轮次结束，**Then** 不投递续行提醒。
+2. **Given** 用户在轮次执行中取消，**When** 轮次结束，**Then** 不投递续行提醒（该路径不派发 `agent/error`，属防御性约束，见 FR-005 实现说明）。
 3. **Given** 插件被配置为 `enabled: false`，**When** 任意错误发生，**Then** 不投递续行提醒。
 
 ---
@@ -86,6 +86,8 @@
 - **FR-003**: 续行判定 MUST 基于 `LlmError.code`，且只接受可重试集合；集合 MUST 复用宿主默认值 `EMPTY_RESPONSE`、`RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`（来源 `dsh-llm/lib/types/retry-policy.js:16-22`），不得自造第二套分类。
 - **FR-004**: 非 `LlmError` 的异常 MUST 不续行。
 - **FR-005**: 用户取消导致的结束 MUST 不续行。
+
+  > **实现说明（2026-11-05 核实）**：取消路径**不派发** `agent/error`——`turn()` 的 catch 在 `abortedCancelCause(signal)` 命中时直接 `throw error`，不调用 `throwError`（`dsh-agent-loop/lib/index.js:1010-1016`）。因此本约束在真实链路上天然成立，插件内的判断是**防御性**的；对应测试只能写成单元级防御断言，不得声称获得了端到端覆盖。
 - **FR-006**: 配置 `enabled: false` 时 MUST 不续行。
 - **FR-007**: 续行投递 MUST 发生在轮次进入 idle 之后。宿主在 `running` 阶段对非 abort 的投递不会置 `wakeRequested`（`dsh-agent-loop/lib/index.js:845-860`），提前投递只会把消息留在队列里不生效。
 - **FR-008**: 投递 MUST 使用 `agent.steer`：它在 idle 时自动开启新一轮，且与排队任务同批时排在队首——`claim()` 先取全部 `next-step`、再取一条 `next-turn`（`dsh-agent-loop/lib/index.js:104-108`）。
@@ -110,7 +112,7 @@
 ### Measurable Outcomes
 
 - **SC-001**: 注入一次可重试的上游错误后，用户在**不做任何操作**的情况下，模型能在下一轮继续原任务（真实会话验证 1 次）。
-- **SC-002**: 注入 `AUTH`、`QUOTA`、`CONTEXT_WINDOW_EXCEEDED` 与一次用户取消，续行投递次数均为 **0**。
+- **SC-002**: 注入 `AUTH`、`QUOTA`、`CONTEXT_WINDOW_EXCEEDED`，续行投递次数均为 **0**；取消场景按防御性单测验证（取消不派发 `agent/error`）。
 - **SC-003**: 连续注入 4 次可重试错误，前 **3** 次续行、第 4 次停止；留痕中出现 3 条 `upstream-resumed` 与 1 条 `upstream-capped`。
 - **SC-004**: `enabled: false` 或 `resumeOnUpstreamError: false` 时，续行投递次数为 **0**。
 - **SC-005**: 既有留痕查询（按 `outcome`、按六个既有 `reason` 过滤）在改造后返回结果不变；`jq` 命令无需修改。
