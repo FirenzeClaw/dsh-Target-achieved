@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933.svg)](https://nodejs.org)
 [![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.5-7c3aed.svg)](https://github.com/deepseek-ai/deepseek-harness)
-[![Tests](https://img.shields.io/badge/tests-97%20passing-brightgreen.svg)](#开发)
+[![Tests](https://img.shields.io/badge/tests-183%20passing-brightgreen.svg)](#开发)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](CHANGELOG.md)
 
 ## 目录
@@ -47,6 +47,7 @@
 - **上游续行**：可重试的上游错误（限流、超时、连接中断）在重试耗尽后自动续行一轮，默认上限 3 次；不可重试错误与用户取消不续行。
 - **判定留痕**：每次判定落一条 JSONL 记录，放行也记，九种原因可区分（六种收尾门 + 三种上游续行）。
 - **设置页可改**：`enabled` / `reminderThreshold` / `reactionWindowMs` / `resumeOnUpstreamError` / `maxResumes` 在宿主设置页即时生效。
+- **跨进程共享**：多个 DSH 入口（web / CLI）共用同一个守护进程，遗忘与续行计数跨入口累计；留痕由它单写，不会交错。守护进程不可用时自动退回进程内判定。
 - **三种安装方式**：bundle、git 源、本地 link。
 
 ## 安装
@@ -233,6 +234,8 @@ tail -n 20 ~/.dsh/logs/target-monitor/gate-trace.jsonl | jq -c .
 
 开销上有三处收敛：只有未声明才注入；向用户发提示每轮至多一次；复述按累计次数节流。
 
+跨进程模式另有一项固定开销：一个常驻守护进程（实测空闲 51 MiB，2000 次请求后 58 MiB）与每次判定一次本机 socket 往返（实测 0.13 毫秒/次，500 次平均）。它不产生 token 成本；守护进程不可用时会降级为进程内判定，功能不变。
+
 短会话、一次性问答的场景里，收尾门的收益可能小于固定开销；长任务、多步实现、需要收尾汇报的场景是它的目标场景。
 
 ## 开发
@@ -242,7 +245,7 @@ npm install
 bash scripts/link-host.sh   # 开发期链接宿主已安装的 @deepseek-ai 包
 
 npm run typecheck
-npm test                    # node --test，97 项
+npm test                    # node --test，183 项
 npm run build
 ```
 

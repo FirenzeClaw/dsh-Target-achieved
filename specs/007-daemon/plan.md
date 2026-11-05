@@ -24,7 +24,7 @@
 
 **Project Type**: 单包 npm 插件（library），附带一个随包分发的后台可执行脚本
 
-**Performance Goals**: 单次 RPC p95 < 5 毫秒（本机 socket）；收尾判定超时预算 200 毫秒；守护进程常驻内存 < 20 MiB
+**Performance Goals**: 单次 RPC 实测 0.13 毫秒（500 次平均，本机 socket）；收尾判定超时预算 200 毫秒；守护进程常驻内存实测 51 MiB 空闲 / 58 MiB（2000 次请求后）
 
 **Constraints**: 判定必须在 `agent/turn-stopping` 监听器返回前完成注入；守护进程不得读写会话正文；不得阻塞 DSH 启动超过 5 秒
 
