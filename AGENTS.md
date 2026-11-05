@@ -17,28 +17,45 @@
 DSH-Target-achieved/
 ├── AGENTS.md                  # 本文件：项目级上下文
 ├── README.md                  # 项目简介与入口
+├── package.json               # ESM 包；peer 依赖由宿主提供
+├── tsconfig.json              # NodeNext + 导入后缀重写
+├── src/                       # 插件实现
+│   ├── index.ts               # 入口：注册章节 / 工具 / 事件
+│   ├── config.ts              # 配置校验（非法值抛出）
+│   ├── state.ts               # (agent, turn) → 目标状态
+│   ├── cause.ts               # FinishReason → StopCause
+│   ├── gate.ts                # 收尾门判定与注入策略
+│   ├── tool.ts                # target_status 工具
+│   ├── prompt.ts              # 系统提示词章节与固定文案
+│   └── notices.ts             # 消息来源归属与构造
+├── tests/
+│   ├── unit/                  # state / config / cause / prompt / gate
+│   └── integration/           # 假 agent 上的完整收尾流程
+├── scripts/link-host.sh       # 开发期链接宿主 @deepseek-ai 包
 ├── docs/
 │   └── PLUGIN-DESIGN.md       # 设计取舍 + 宿主事件面调研结论（事实来源）
 ├── specs/
-│   └── 001-target-monitor/    # 收尾门特性：spec.md 与质量清单
-├── .specify/                  # speckit 脚手架（templates / memory / scripts/bash）
-│   └── memory/constitution.md # 项目宪法（本仓库约束的权威来源）
-├── .dsh/skills/               # speckit-* 技能（由 specify init 生成）
-└── .codegraph/                # 代码索引（codegraph.db 已被自身 .gitignore 排除）
+│   └── 001-target-monitor/    # 收尾门特性：spec / plan / tasks / contracts
+├── .specify/                  # speckit 脚手架
+│   └── memory/constitution.md # 项目宪法（v1.1.0）
+└── .dsh/skills/               # speckit-* 技能
 ```
 
-代码目录（`src/`、`test/`）尚未建立——仓库当前只有脚手架，无 `package.json`。
+构建产物在 `dist/`（已 gitignore）。
 <!-- /AUTO:STRUCTURE -->
 
 <!-- AUTO:BUILD -->
 ## 构建与运行
 
-- 安装：**尚未建立**（无 `package.json`）。计划：pnpm；首个实现切片必须同时落地 `package.json` 与脚本
-- 运行：**尚未建立**。挂载方式已确定：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
-- 测试：**尚未建立**。落地时必须选定 runner 并回填本节，禁止后续会话臆测 `npm test`
-- Lint / 类型检查：**尚未建立**（预期 `tsc --noEmit`）
+- 安装：`npm install`（peer 依赖由宿主提供，本地用 `bash scripts/link-host.sh` 链接；已装 `typescript@5.9.3`、`@types/node`）
+- 构建：`npm run build` → `tsc -p tsconfig.json`，产物在 `dist/`，`.ts` 导入后缀会被重写为 `.js`
+- 类型检查：`npm run typecheck` → `tsc -p tsconfig.json --noEmit`
+- 测试：`npm test` → `node --test`（Node 24 原生类型剥离，零测试框架依赖）
+- 挂载：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
 
-> 本节的"尚未建立"是事实，不是待办文案。任何新增脚本都要在这里写实命令；未在本节出现的命令不得在交付说明里声称"已通过"。
+**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 38 项全通过。宿主事件面只做了单元/集成替身验证，**尚未在真实会话中跑通** -- 见 `specs/001-target-monitor/quickstart.md` 的待验证项。
+
+> 任何新增脚本都要在这里写实命令；未在本节出现的命令不得在交付说明里声称"已通过"。
 <!-- /AUTO:BUILD -->
 
 ## 宿主事实速查（2026-11-05 核实，版本 0.2.1-rc.5）

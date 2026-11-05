@@ -1,0 +1,45 @@
+/**
+ * 文案测试：三条硬性要求（非用户消息、否认授权、三个出口）与长度上限。
+ * @module
+ */
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { DECLARATION_SECTION, repairText, stallNoticeText } from '../../src/prompt.ts'
+
+test('声明协议章节含两个状态与后果说明', () => {
+  assert.match(DECLARATION_SECTION, /done/)
+  assert.match(DECLARATION_SECTION, /awaiting_user/)
+  assert.match(DECLARATION_SECTION, /unfinished/)
+})
+
+test('提醒文案含三个出口', () => {
+  const text = repairText('undeclared', 1)
+  assert.match(text, /target_status\("done"\)/)
+  assert.match(text, /target_status\("awaiting_user"\)/)
+  assert.match(text, /continue from where you stopped/)
+})
+
+test('提醒文案显式否认授权且标为非用户消息', () => {
+  const text = repairText('undeclared', 1)
+  assert.match(text, /NOT a user message/)
+  assert.match(text, /not user approval or consent/)
+  assert.match(text, /does not lift any confirmation requirement/)
+})
+
+test('截断变体说明工具未执行，普通变体不含该句', () => {
+  assert.match(repairText('truncated', 1), /were not executed/)
+  assert.doesNotMatch(repairText('undeclared', 1), /were not executed/)
+})
+
+test('提醒长度保持在契约上限内（< 1.5 KB）', () => {
+  for (const attempt of [1, 5, 11]) {
+    const bytes = Buffer.byteLength(repairText('truncated', attempt), 'utf8')
+    assert.ok(bytes < 1536, `attempt ${attempt} 长度 ${bytes} 超限`)
+  }
+})
+
+test('卡住提示提到阈值且面向用户', () => {
+  const text = stallNoticeText(5)
+  assert.match(text, /5/)
+  assert.match(text, /卡住/)
+})
