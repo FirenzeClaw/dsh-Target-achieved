@@ -26,7 +26,9 @@
 
 **Performance Goals**: 已声明轮次零额外开销（放行判定为 O(1) 内存查表）；未声明轮次每次多一个模型步骤；不引入额外请求
 
-**Constraints**: 注入不得晚于轮次关闭、不得阻塞用户取消、不得污染系统提示词前缀（静态注册一次）、不得拼接外部文本
+**Constraints**: 注入不得晚于轮次关闭、不得阻塞用户取消、不得污染系统提示词前缀（静态注册一次）、不得拼接外部文本；**注入必须先于任何排队消息被消费**（见下方"注入顺序"）
+
+**注入顺序（FR-017）**：宿主的 `turn-stopping` 仅在 `nextStep` 队列为空时派发（`dsh-agent-loop/lib/index.js:1001`），因此进入门时队首天然为空，`steer` 追加即为队首。仍存在一个竞态窗口（守卫检查后、`steer` 前有另一条 steer 消息插入），实现时在注入前检查 `agent.inbox.nextStep.length`：为空用 `agent.steer()`（会唤醒），非空则用 `agent.inbox.prepend('next-step', msg)` 强制队首，避免未完成的任务先接到新指令。
 
 **Scale/Scope**: 单会话单顶层 agent；每轮状态条目数 = 1；无跨会话共享
 

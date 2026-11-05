@@ -66,7 +66,7 @@
 ### Implementation for User Story 1
 
 - [ ] T016 [US1] 实现 `src/tool.ts`：`defineTool` 注册 `target_status`，参数 `state`（`'done' | 'awaiting_user'`，必填）与 `summary`（可选），输出 `{ ok, turn, state }`；非顶层 agent 返回 `TARGET_STATUS_NOT_ROOT`，非法枚举返回 `TARGET_STATUS_INVALID_STATE`（见 `contracts/target-status.tool.md`）
-- [ ] T017 [US1] 实现 `src/gate.ts`：`agent/turn-stopping` 处理器——非顶层 agent 直接返回；已声明直接返回；否则 `repairs += 1` 并 `agent.steer(createRepairNotice(...))`；监听器内异常就地捕获记录，不得外抛
+- [ ] T017 [US1] 实现 `src/gate.ts`：`agent/turn-stopping` 处理器——非顶层 agent 直接返回；已声明直接返回；否则 `repairs += 1` 并注入提醒；注入前检查 `agent.inbox.nextStep`：为空用 `agent.steer(...)`，非空用 `agent.inbox.prepend('next-step', ...)` 保证提醒位于队首（FR-017）；监听器内异常就地捕获记录，不得外抛
 - [ ] T018 [US1] 在 `src/index.ts` 接线：注册 `target_status` 工具、订阅 `agent/turn-stopping` 与 `agent/disposed`，并在 dispose 时清理该 agent 闩锁
 - [ ] T019 [US1] 补 `tests/unit/gate.test.ts` 用例锁定 FR-014：助手正文含 `DONE` / `完成` / "task complete" 等字样但未调用 `target_status` → **仍然** steer；判定只读闩锁，不读消息文本
 - [ ] T020 [US1] 端到端自测：按 `quickstart.md` S1 走查一次，记录实际观察结果到 `quickstart.md` 的"已知需要人工确认的点"表
@@ -166,6 +166,7 @@
 - [ ] T043 跑 `quickstart.md` 全部 6 个构造场景（S1–S6）**外加 3 个不同类型的真实任务**（SC-007），把结果填进该文件的验证表
 - [ ] T044 按五轴审查（正确性/可读性/架构/安全/性能），安全轴必须覆盖：来源不得为 `user`、文案不得拼接外部文本、取消不复活、注入不破坏前缀缓存
 - [ ] T045 [P] 更新 `AGENTS.md` §宿主事实速查（补 `concludesTurn`、notice 渲染的实测结论）与 `README.md`（当前仍写着"尚无实现代码"）
+- [ ] T046 补 FR-017 顺序用例于 `tests/unit/gate.test.ts`：`nextStep` 为空 → 走 `steer`；`nextStep` 已有消息 → 走 `prepend` 且提醒位于索引 0；并断言两种路径下排队消息相对顺序不变
 
 ---
 
@@ -190,7 +191,7 @@
 
 | 文件 | 涉及任务 | 建议顺序 |
 |---|---|---|
-| `tests/unit/gate.test.ts` | T013 → T019 → T021 → T030 → T032 → T035 → T038 | 按编号顺序 |
+| `tests/unit/gate.test.ts` | T013 → T019 → T021 → T030 → T032 → T035 → T038 → T046 | 按编号顺序 |
 | `tests/unit/prompt.test.ts` | T014（创建）→ T022 → T026 → T039 | 按编号顺序 |
 | `tests/unit/config.test.ts` | T011（创建）→ T031 | 按编号顺序 |
 | `tests/integration/turn-gate.test.ts` | T015（创建）→ T036 | 按编号顺序 |

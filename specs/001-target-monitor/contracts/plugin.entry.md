@@ -42,6 +42,7 @@ export function apply(ctx: Context, config: Config): void
 ## 顺序与副作用
 
 - 系统提示词章节只注册一次，`order` 取 `ctx.systemPrompt.getSectionOrder(...)` 的既有槽位之后，避免与 `tool:goal` 策略段冲突。
+- **注入必须排在队首**：宿主的收尾判断仅在 `nextStep` 为空时派发，故正常路径下 `steer` 追加即位于队首；若进入时 `agent.inbox.nextStep` 非空（竞态），改用 `agent.inbox.prepend('next-step', message)`。未完成的任务不得先接到排队的新指令（FR-017）。
 - 监听器内的任何异常必须就地捕获并记录，**不得**向宿主抛出——否则会打断整轮对话（宪法 III）。
 - 插件不得修改 agent 的模型、provider、权限或沙箱配置。
 
