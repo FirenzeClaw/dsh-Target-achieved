@@ -82,6 +82,8 @@ DSH-Target-achieved/
 
 > 曾有一个缺陷：默认退出回调只 `process.exit(0)`，不清理文件；测试因为注入了会 `close()` 的 `onExit` 而没暴露。生产路径下 socket/pid 会残留到下一个客户端 `cleanStale` 收掉。已修。
 
+> **排查注入时要看留痕的 `at`，不要看消息到达时间。** 注入投递到下一步，长轮次里它可能一直排在 inbox 里，等这一轮真正结束才出现在对话里。实测一次 turn 42 的判定发生在 17:39:42，提醒直到 19:11 才显示——期间我误以为是"刚刚这轮又被拦了"。判定是否发生、判定的是哪一轮，只以 `~/.dsh/logs/target-monitor/gate-trace.jsonl` 的 `at`/`turn` 为准。
+
 **守护进程实测（2026-11-05）**：单次 RPC 0.13 毫秒（500 次平均）；空闲 RSS 51 MiB、2000 次请求后 58 MiB；socket 权限 0600、`run/` 目录 0700。这些数字写在 README「开销」与 `specs/007-daemon/plan.md`，改动实现后需重测。
 
 **发布**：npm 与 git 双通道，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`。`package.json` 含 `dsh.manifestVersion: 1` + `dsh.bundle.patch`，支持 bundle / git / 本地 link 三种安装方式。
