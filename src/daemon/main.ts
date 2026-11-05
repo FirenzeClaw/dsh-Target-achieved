@@ -18,17 +18,17 @@ import { configureTrace, recordTraceForSession } from '../trace.ts'
 import { handleRequest, type ServerDeps } from './server.ts'
 import { sweep } from './state.ts'
 
-/** 最后一个连接断开后的宽限时长。 */
-const GRACE_MS = 30_000
+/** 最后一个连接断开后的宽限时长（默认值；测试可覆盖）。 */
+const DEFAULT_GRACE_MS = 30_000
+
+/** 当前实例使用的宽限时长。 */
+let graceMs = DEFAULT_GRACE_MS
 
 /** 闲置会话回收的检查间隔。 */
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000
 
-/** 连接数。 */
-let connections = 0
-
-/** 宽限计时器。 */
-let graceTimer: NodeJS.Timeout | undefined
+/** 宽限到期时的动作（每个实例各自持有）。 */
+type ExitHandler = () => void
 
 /**
  * 解析命令行参数。
@@ -53,7 +53,40 @@ export function parseArgs(argv: readonly string[]): { socketPath: string; pidPat
  * @param options - socket 与 pid 路径
  * @returns 关闭函数（测试用）
  */
-export function startDaemon(options: { socketPath: string; pidPath: string }): { close(): void; server: ReturnType<typeof createServer> } {
+export function startDaemon(options: {
+  socketPath: string
+  pidPath: string
+  /** 宽限时长；测试用它把 30 秒缩短到毫秒级。 */
+  graceMs?: number
+  /** 退出回调；默认 `process.exit(0)`，测试里换成标记以便断言。 */
+  onExit?: () => void
+}): { close(): void; server: ReturnType<typeof createServer> } {
+  const instanceGraceMs = options.graceMs ?? DEFAULT_GRACE_MS
+  const exitHandler: ExitHandler = options.onExit ?? (() => { process.exit(0) })
+
+  // 连接数与计时器必须属于实例而不是模块：一个进程里可能有多个 server
+  // （测试就是这种情况），共享计数会让"最后一个连接断开"永远不成立。
+  let connections = 0
+  let graceTimer: NodeJS.Timeout | undefined
+
+  /**
+   * 安排宽限退出。
+   *
+   * 只有在连接数为零时才计时；计时器 `unref()` 后不阻止进程退出，
+   * 但监听中的 server 一旦 `close` 就没有活跃句柄，进程会自然结束。
+   */
+  const scheduleExit = (): void => {
+    if (connections > 0) return
+    if (graceTimer !== undefined) return
+
+    graceTimer = setTimeout(() => {
+      graceTimer = undefined
+      if (connections > 0) return
+      exitHandler()
+    }, instanceGraceMs)
+    graceTimer.unref()
+  }
+
   mkdirSync(dirname(options.socketPath), { recursive: true })
   // 先清掉可能残留的 socket：走到这里说明调用方已确认无人监听，
   // 但 bind 仍会因为文件存在而 EADDRINUSE。
@@ -175,7 +208,7 @@ export function startDaemon(options: { socketPath: string; pidPath: string }): {
   server.listen(options.socketPath, () => {
     writeFileSync(options.pidPath, `${process.pid}\n`, { mode: 0o600 })
   })
-  server.unref()
+  // 这里绝不能 unref：未 ref 的监听器不持有事件循环，进程会在 listen 后立刻退出。
 
   const sweeper = setInterval(() => {
     sweep(Date.now())
@@ -191,25 +224,6 @@ export function startDaemon(options: { socketPath: string; pidPath: string }): {
       cleanupFiles(options)
     },
   }
-}
-
-/**
- * 安排宽限退出。
- *
- * 只有在连接数为零时才计时；计时器 `unref()` 后不阻止进程退出，
- * 但监听中的 server 一旦 `close` 就没有活跃句柄，进程会自然结束。
- */
-function scheduleExit(): void {
-  if (connections > 0) return
-  if (graceTimer !== undefined) return
-
-  graceTimer = setTimeout(() => {
-    graceTimer = undefined
-    if (connections > 0) return
-    // 触发一次正常退出，交给 exit handler 清理文件。
-    process.exit(0)
-  }, GRACE_MS)
-  graceTimer.unref()
 }
 
 /**

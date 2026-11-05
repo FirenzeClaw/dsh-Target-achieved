@@ -22,17 +22,32 @@ export const DEFAULT_CONNECT_TIMEOUT_MS = 5_000
 
 /** 协议版本不匹配。遇到它不应重试，只降级（契约 C-013）。 */
 export class ProtocolMismatchError extends Error {
-  constructor(readonly received: number) {
+  /** 对端声明的协议版本。 */
+  readonly received: number
+
+  /**
+   * @param received - 对端声明的协议版本
+   */
+  constructor(received: number) {
     super(`target-monitor: daemon protocol ${String(received)} is not compatible with ${String(PROTOCOL_VERSION)}`)
     this.name = 'ProtocolMismatchError'
+    this.received = received
   }
 }
 
 /** 连接或请求失败。 */
 export class IpcError extends Error {
-  constructor(message: string, readonly code: string) {
+  /** 稳定错误码。 */
+  readonly code: string
+
+  /**
+   * @param message - 说明
+   * @param code - 稳定错误码
+   */
+  constructor(message: string, code: string) {
     super(message)
     this.name = 'IpcError'
+    this.code = code
   }
 }
 

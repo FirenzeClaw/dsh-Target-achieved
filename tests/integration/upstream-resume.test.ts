@@ -62,6 +62,8 @@ function harness(roots: Agent[], config: Record<string, unknown> = {}): Harness 
   } as unknown as Context
 
   apply(ctx, {
+    // 集成测试固定走进程内实现：这里验的是事件接线与文案，不是 IPC。
+    crossProcess: false,
     enabled: true,
     stallNoticeThreshold: 5,
     reminderThreshold: 3,

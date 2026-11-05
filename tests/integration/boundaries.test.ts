@@ -24,9 +24,10 @@ test('FR-013：不得接管请求重试，也不得自行开新轮次', async ()
 test('FR-011：取消路径必须先判 aborted，再考虑注入', async () => {
   const entry = await src('index.ts')
   assert.match(entry, /signal\.aborted/)
-  // aborted 判定必须出现在 handleTurnStopping 调用之前
+  // aborted 判定必须出现在判定入口之前（spec 007 后入口从 handleTurnStopping
+  // 换成了 monitor.turnStopping，守卫位置不变）
   assert.ok(
-    entry.indexOf('signal.aborted') < entry.indexOf('handleTurnStopping(gate'),
+    entry.indexOf('signal.aborted') < entry.indexOf('monitor.turnStopping('),
     'aborted 守卫必须在注入之前',
   )
 })

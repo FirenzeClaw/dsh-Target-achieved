@@ -13,6 +13,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { classify, finishOf } from './cause.ts'
 import type { TargetMonitorConfig } from './config.ts'
 import { forgetCountOf, noteInjection, resetForgetCount } from './forget.ts'
+import { composeInjection } from './monitor/compose.ts'
 import { planTurnStopping } from './monitor/plan.ts'
 import { noticeSummary } from './notices.ts'
 import { REMINDER_TEXT, repairText, stallNoticeText } from './prompt.ts'
@@ -83,13 +84,20 @@ export function handleTurnStopping(deps: GateDeps, agent: Agent, turn: number): 
   // 复述只在真正发出注入的这一轮消费阈值，避免"达阈值但没发出去"导致复述丢失。
   if (plan.reminder) resetForgetCount(agent)
 
-  // 复述紧跟在修复正文之后：模型最先读到的是"你忘了声明"，再读规范原文，
-  // 最后是给用户的卡住提示（若触发）。
-  const parts = [repairText(repairCause, plan.attempt)]
-  if (plan.reminder) parts.push(REMINDER_TEXT)
-  if (plan.stallNotice) parts.push(stallNoticeText(config.stallNoticeThreshold))
+  // 正文组合与远程路径共用 composeInjection，保证两条路径逐字一致。
+  const text = composeInjection(
+    {
+      inject: true,
+      reason: plan.reason,
+      attempt: plan.attempt,
+      reminder: plan.reminder,
+      stallNotice: plan.stallNotice,
+      cause: plan.cause,
+    },
+    config.stallNoticeThreshold,
+  )
 
-  deps.deliver(agent, parts.join('\n\n'), noticeSummary(turn, repairCause, plan.attempt))
+  deps.deliver(agent, text, noticeSummary(turn, repairCause, plan.attempt))
   deps.trace?.(agent, { turn, outcome: 'injected', reason: 'undeclared', attempt: plan.attempt })
   return true
 }

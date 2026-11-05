@@ -81,7 +81,8 @@ function harness(roots: Agent[]): Harness {
     agents: { roots: () => roots },
   } as unknown as Context
 
-  apply(ctx, { enabled: true, stallNoticeThreshold: 5, reminderThreshold: 3, reactionWindowMs: 30_000 })
+  // 集成测试固定走进程内实现：这里验的是事件接线与文案，不是 IPC。
+  apply(ctx, { enabled: true, stallNoticeThreshold: 5, reminderThreshold: 3, reactionWindowMs: 30_000, crossProcess: false })
 
   return {
     startFrame(agent, turn) {

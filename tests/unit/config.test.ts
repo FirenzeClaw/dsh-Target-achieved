@@ -101,6 +101,7 @@ test('snapshot 把 volatile 引用拍平为普通值', () => {
     resumeOnUpstreamError: true,
     maxResumes: 2,
     declarationSection: true,
+    crossProcess: true,
   })
 })
 

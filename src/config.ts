@@ -45,6 +45,8 @@ export const Config = z.object({
   maxResumes: z.number().default(DEFAULT_MAX_RESUMES).volatile(),
   /** 是否注入声明规范；关闭后工具与收尾门一并停用（spec 008）。 */
   declarationSection: z.boolean().default(true).volatile(),
+  /** 是否使用跨进程守护；关闭后强制进程内判定（spec 007 / FR-016）。 */
+  crossProcess: z.boolean().default(true).volatile(),
 })
 
 /** 宿主解析后的配置：volatile 字段是稳定引用，需 `.get()` 取当前值。 */
@@ -56,6 +58,7 @@ export interface ResolvedConfig {
   resumeOnUpstreamError: Volatile<boolean>
   maxResumes: Volatile<number>
   declarationSection: Volatile<boolean>
+  crossProcess: Volatile<boolean>
 }
 
 /** 门与工具读到的普通值。 */
@@ -67,6 +70,7 @@ export interface TargetMonitorConfig {
   resumeOnUpstreamError: boolean
   maxResumes: number
   declarationSection: boolean
+  crossProcess: boolean
 }
 
 /**
@@ -221,6 +225,7 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
       resumeOnUpstreamError: assertVolatileBoolean(input['resumeOnUpstreamError'], 'resumeOnUpstreamError'),
       maxResumes: assertVolatileNonNegativeInt(input['maxResumes'], 'maxResumes', DEFAULT_MAX_RESUMES),
       declarationSection: assertVolatileBooleanOr(input['declarationSection'], 'declarationSection', true),
+      crossProcess: assertVolatileBooleanOr(input['crossProcess'], 'crossProcess', true),
     }
   }
 
@@ -245,5 +250,6 @@ export function snapshot(config: ResolvedConfig): TargetMonitorConfig {
     resumeOnUpstreamError: config.resumeOnUpstreamError.get() !== false,
     maxResumes: config.maxResumes.get(),
     declarationSection: config.declarationSection.get() !== false,
+    crossProcess: config.crossProcess.get() !== false,
   }
 }

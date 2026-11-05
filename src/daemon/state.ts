@@ -156,6 +156,8 @@ export function turnStopping(input: {
       resumeOnUpstreamError: input.config.resumeOnUpstreamError,
       maxResumes: input.config.maxResumes,
       declarationSection: input.config.declarationSection,
+      // 守护进程只做判定，不需要知道调用方是否允许跨进程。
+      crossProcess: true,
     },
   })
 

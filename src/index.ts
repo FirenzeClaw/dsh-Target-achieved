@@ -9,7 +9,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { forgetCause, recordFinish } from './cause.ts'
+import { finishOf, forgetCause, recordFinish } from './cause.ts'
 import { forgetForgetful, noteDeclaration } from './forget.ts'
 import {
   claimResumeTurn,
@@ -20,11 +20,14 @@ import {
   resumeStateOf,
   shouldResume,
 } from './resume.ts'
-import { Config, resolveConfig, snapshot, type TargetMonitorConfig } from './config.ts'
+import { Config, resolveConfig, snapshot, type ResolvedConfig, type TargetMonitorConfig } from './config.ts'
 import { createNotice } from './notices.ts'
 import { DECLARATION_SECTION, repairText } from './prompt.ts'
-import { handleTurnStopping, type GateDeps } from './gate.ts'
 import { noticeSummary } from './notices.ts'
+import { createLocalMonitor } from './monitor/local.ts'
+import { createRemoteMonitor, type RemoteMonitor } from './monitor/remote.ts'
+import type { Monitor } from './monitor/types.ts'
+import { pidPath, socketPath } from './paths.ts'
 import { forget } from './state.ts'
 import { registerTargetStatus } from './tool.ts'
 import { configureTrace, recordTrace } from './trace.ts'
@@ -89,6 +92,18 @@ export function apply(ctx: Context, rawConfig: unknown): void {
   // 让路径解析与上限在插件生命周期内固定（不逐条重算）。
   configureTrace({})
 
+  // 选择判定通道。crossProcess 是启动期决策：运行中切换会让同一会话的状态
+  // 在「守护进程」与「本进程」之间跳，计数随即失真；要换只能重启。
+  const monitor: Monitor | RemoteMonitor =
+    snapshot(config).crossProcess
+      ? createRemoteMonitor({
+          socketPath: socketPath(),
+          pidPath: pidPath(),
+          config: () => snapshot(config),
+          warn: (message) => { console.warn(message) },
+        })
+      : createLocalMonitor(() => snapshot(config))
+
   // 不在这里 `if (!config.enabled) return`：enabled 是 volatile，用户随时可在设置页关掉，
   // 关掉后必须立刻停止注入。若启动时就 return，开关会变成"改了没反应"。
   ctx.systemPrompt.section({
@@ -101,24 +116,22 @@ export function apply(ctx: Context, rawConfig: unknown): void {
     ctx,
     turnOf,
     () => config.enabled.get() !== false,
-    // 声明时刻与反应窗口现读：窗口可在设置页调整，捕获快照会让改动失效。
-    (agent) => noteDeclaration(agent, Date.now(), config.reactionWindowMs.get()),
+    // 声明走判定通道：远程时由守护进程计数，本地时落到进程内状态。
+    (agent, turn, state) => { void monitor.declare(agent, turn, state) },
   )
 
-  const gate: GateDeps = {
-    // config 作为访问器传入：每次判定都读当前值，而不是 apply 时的快照。
-    config: () => snapshot(config),
-    isRoot: (agent) => ctx.agents.roots().includes(agent),
-    deliver(agent, text, summary) {
-      const message = createNotice(text, summary)
-      // FR-017：队首优先。空队列走 steer（会唤醒驱动）；非空则显式 prepend。
-      if (agent.inbox.nextStep.length === 0) agent.steer(message)
-      else agent.inbox.prepend('next-step', message)
-    },
-    trace(agent, entry) {
-      // 留痕是旁路：recordTrace 内部吞掉 I/O 异常，绝不会让门失败（FR-007）。
-      recordTrace(agent, entry)
-    },
+  /**
+   * 投递一条自救提醒。
+   *
+   * FR-017：队首优先。空队列走 steer（会唤醒驱动）；非空则显式 prepend。
+   * @param agent - 目标 agent
+   * @param text - 正文
+   * @param summary - 摘要
+   */
+  function deliver(agent: Agent, text: string, summary: string): void {
+    const message = createNotice(text, summary)
+    if (agent.inbox.nextStep.length === 0) agent.steer(message)
+    else agent.inbox.prepend('next-step', message)
   }
 
   ctx.on('agent/turn-stopping', (payload) => {
@@ -136,11 +149,36 @@ export function apply(ctx: Context, rawConfig: unknown): void {
       console.warn('target-monitor: 未收到 assistant-stream 的 finish 帧，停止原因分类降级为 undeclared')
     }
 
+    const deliverOutcome = (outcome: { inject: boolean; text?: string; summary?: string }): void => {
+      if (!outcome.inject || outcome.text === undefined) return
+      deliver(payload.agent, outcome.text, outcome.summary ?? noticeSummary(payload.turn, 'undeclared', 1))
+    }
+
     try {
-      // 必须同步注入：监听器返回后宿主立刻检查 nextStep，晚了就关轮。
-      handleTurnStopping(gate, payload.agent, payload.turn)
+      // 进程内实现同步返回，注入因此仍发生在监听器返回之前（宿主随后检查 nextStep）；
+      // 跨进程实现返回 Promise，宿主以 serial 派发本钩子会等待它
+      // （`dsh-agent-loop/lib/index.js:1001` 的 dispatch.serial）。
+      const outcome = monitor.turnStopping({
+        agent: payload.agent,
+        turn: payload.turn,
+        finishKind: finishOf(payload.agent, payload.turn)?.kind,
+        aborted: false,
+        isRoot: ctx.agents.roots().includes(payload.agent),
+      })
+
+      if (outcome instanceof Promise) return outcome.then(deliverOutcome).catch(reportGateError)
+      deliverOutcome(outcome)
+      return undefined
     } catch (error: unknown) {
-      // 门内异常不得打断对话；记录后放行本轮。
+      reportGateError(error)
+      return undefined
+    }
+
+    /**
+     * 门内异常不得打断对话；记录后放行本轮。
+     * @param error - 异常
+     */
+    function reportGateError(error: unknown): void {
       console.warn('target-monitor: 收尾判断失败，本轮放行', error)
     }
   })
@@ -170,49 +208,26 @@ export function apply(ctx: Context, rawConfig: unknown): void {
   function scheduleResume(input: { agent: Agent; turn: number; error: unknown }): void {
     const { agent, turn, error } = input
     const errorCode = errorCodeOf(error)
-    const errorClass = classifyUpstreamError(error)
-    if (errorClass !== 'retryable') {
-      recordTrace(agent, { turn, outcome: 'released', reason: 'upstream-skipped', attempt: 0, errorCode })
-      return
-    }
+    const retryable = classifyUpstreamError(error) === 'retryable'
 
-    // 先占轮次再排队：同一轮可能触发多次 agent/error（例如 turn/end 落盘失败），
-    // 不在此去重就会排入两条 whenIdle 回调、投递两次。
-    if (!claimResumeTurn(agent, turn)) return
+    void monitor.upstreamError(agent, turn, errorCode, retryable).then((decision) => {
+      if (!decision.resume) return
 
-    void agent.whenIdle().then(() => {
-      // 等待期间用户可能已经取消、关闭开关或换了目标：投递前必须重新核对，
-      // 否则一次迟到的投递就会绕过用户刚刚做出的决定。
-      const current = snapshot(config)
-      const decision = shouldResume({
-        enabled: current.enabled,
-        resumeOnUpstreamError: current.resumeOnUpstreamError,
-        maxResumes: current.maxResumes,
-        consecutive: resumeStateOf(agent)?.consecutive ?? 0,
-        isRoot: ctx.agents.roots().includes(agent),
-        isDisposed: disposed.has(agent),
-        // 占用已在监听器同步阶段完成，这里不再判 sameTurn。
-        sameTurn: false,
+      return agent.whenIdle().then(async () => {
+        // 等待期间用户可能已经取消、关闭开关或换了目标：投递前必须重新核对，
+        // 否则一次迟到的投递就会绕过用户刚刚做出的决定。
+        if (disposed.has(agent)) return
+        if (!ctx.agents.roots().includes(agent)) return
+
+        const confirmed = await monitor.resumeConfirm(agent, turn, errorCode)
+        if (!confirmed.resume) return
+
+        agent.steer(createNotice(repairText('undeclared', 1), noticeSummary(turn, 'upstream', 1)))
       })
-
-      if (!decision.resume) {
-        recordTrace(agent, { turn, outcome: 'released', reason: decision.reason, attempt: 0, errorCode })
-        return
-      }
-
-      agent.steer(createNotice(repairText('undeclared', 1), noticeSummary(turn, 'upstream', 1)))
-      noteResume(agent)
-      recordTrace(agent, {
-        turn,
-        outcome: 'injected',
-        reason: 'upstream-resumed',
-        attempt: 1,
-        errorCode,
-      })
-    }).catch((error: unknown) => {
+    }).catch((error_: unknown) => {
       // whenIdle 或回调内的异常同样不能变成 unhandledRejection：
       // 那会在测试里静默失败，在生产里变成一条无人处理的告警。
-      console.warn('target-monitor: 续行投递失败，本轮不续行', error)
+      console.warn('target-monitor: 续行投递失败，本轮不续行', error_)
     })
   }
 
