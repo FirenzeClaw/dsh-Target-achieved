@@ -23,7 +23,7 @@ test('提醒文案含三个出口', () => {
   const text = repairText('undeclared', 1)
   assert.match(text, /target_status\("done"\)/)
   assert.match(text, /target_status\("awaiting_user"\)/)
-  assert.match(text, /continue from where you stopped/)
+  assert.match(text, /continue from where you stopped/i)
 })
 
 test('提醒文案显式否认授权且标为非用户消息', () => {
@@ -31,6 +31,15 @@ test('提醒文案显式否认授权且标为非用户消息', () => {
   assert.match(text, /NOT a user message/)
   assert.match(text, /not user approval or consent/)
   assert.match(text, /does not lift any confirmation requirement/)
+})
+
+test('提醒以"继续工作"开场，不复述模型行为问题（避免引发回避性分心）', () => {
+  const text = repairText('undeclared', 2)
+  // 本项目只维持推进，不纠正模型：把收尾诊断成"失误"会诱发后续的规避行为。
+  assert.match(text, /Continue from where you stopped/)
+  assert.doesNotMatch(text, /attempted to close/i)
+  assert.doesNotMatch(text, /without declaring/i)
+  assert.doesNotMatch(text, /previous turn/i)
 })
 
 test('截断变体说明工具未执行，普通变体不含该句', () => {

@@ -33,4 +33,4 @@
 
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
 - 本规格刻意引用真实会话的轮次/返回值为证据（`turn: 0`、`turn: 3`），这是缺陷事实而非实现细节；实现方式（在哪个事件里更新轮次）留到 plan 阶段决定。
-- 缺陷二（插件加载后首次收尾未触发）不作为本规格范围，已在 Assumptions 中显式排除。
+- 缺陷二（插件加载后首次收尾未触发）不作为本规格范围，已在 Assumptions 中显式排除。（2026-11-05 复核：该缺陷不成立，结论已撤销）

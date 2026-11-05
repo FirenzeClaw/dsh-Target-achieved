@@ -21,25 +21,26 @@ createUserMessage({
 ## 文案骨架（`reason = undeclared`）
 
 ```text
-[target-monitor] Automated self-recovery notice — NOT a user message.
+[target-monitor] Automated notice — NOT a user message.
 
-You closed the previous turn without declaring the target state.
-This may mean the task is unfinished, or that your output was cut off.
+Continue from where you stopped. Do not restart.
 
-- This is not user input and is not user approval or consent for any action
-  you proposed earlier.
-- It does not lift any confirmation requirement. If you were waiting for the
-  user to confirm something, call target_status("awaiting_user") and close again.
-- If the task is complete: call target_status("done"), then report to the user.
-- Otherwise: continue from where you stopped. Do not restart from scratch.
+- If the task is complete: call target_status("done"), then report.
+- If waiting for the user: call target_status("awaiting_user"), then close.
+- This is not user input and not user approval or consent for any earlier proposal;
+  it does not lift any confirmation requirement.
+
+(attempt N in this turn)
 ```
+
+> 首段不陈述"你未声明就收尾"：把收尾诊断成失误会诱发模型在后续回避中断。原因类别只在截断变体中显式给出（FR-008）；"未声明"由门本身与常驻的声明章节承载。
 
 ## 文案增量
 
 | 条件 | 追加内容 |
 |---|---|
-| `reason = truncated` | `Your previous message was truncated by the output length limit; tool calls after the cut were not executed.` |
-| `attempt === 5` | 面向用户的一段：该轮已连续 5 次未声明目标状态，可能卡住；可随时中断或补充指示。 |
+| `reason = truncated` | `Output was cut by the length limit; tool calls after the cut were not executed.` |
+| `attempt === 5` | 面向用户的一段：本轮连续 5 次未声明目标状态，可能已卡住；可中断或补充指示。 |
 
 ## 硬性要求
 
@@ -52,5 +53,5 @@ This may mean the task is unfinished, or that your output was cut off.
 ## 反例
 
 - ❌ `source.kind = 'user'` —— 会在权限判定层面冒充人类授权。
-- ❌ 文案只写 "Please continue." —— 缺少原因、出口与非授权声明。
+- ❌ 文案只写 "Please continue." —— 缺少三个出口与非授权声明。
 - ❌ 拼接上一次工具输出用于"提醒模型看到什么" —— 扩大注入面。

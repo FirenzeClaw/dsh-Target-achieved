@@ -148,8 +148,9 @@ test('累计三次遗忘后，第四次注入带规范复述', async () => {
 
   const last = latestText(f)
   assert.match(last, /Reminder — the turn-closing rule/)
-  assert.match(last, /call target_status\("done"\) FIRST, then report/)
-  assert.match(last, /call target_status\("awaiting_user"\) FIRST, then ask/)
+  // 大小写不承载约束：这里断言的是"先声明"的语序，文案微调不应误报。
+  assert.match(last, /call target_status\("done"\) first, then report/i)
+  assert.match(last, /call target_status\("awaiting_user"\) first, then ask/i)
 })
 
 test('复述发出后计数清零，紧接着的注入不再复述', async () => {

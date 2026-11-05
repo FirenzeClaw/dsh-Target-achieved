@@ -5,6 +5,12 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+
+- 收尾提醒与声明规范改为干练、机械的注入式措辞。提醒首段只给"继续工作"指令，不再描述"你未声明就收尾"——把收尾诊断成失误会诱发模型在后续回避中断，分散注意力；本项目维持推进，不纠正模型。系统提示词章节 324 字符、注入提醒 409 字符（截断版 489）、复述 251 字符（原 433 / 647 / 306）。`tests/unit/prompt.test.ts` 断言提醒以"继续"开场且不含诊断措辞；`tests/integration/reminder.test.ts` 的复述断言改为大小写不敏感。
+
 ## [0.4.2] - 2026-11-05
 
 ### Fixed

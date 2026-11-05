@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933.svg)](https://nodejs.org)
 [![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.5-7c3aed.svg)](https://github.com/deepseek-ai/deepseek-harness)
-[![Tests](https://img.shields.io/badge/tests-197%20passing-brightgreen.svg)](#开发)
+[![Tests](https://img.shields.io/badge/tests-198%20passing-brightgreen.svg)](#开发)
 [![Version](https://img.shields.io/badge/version-0.4.2-orange.svg)](CHANGELOG.md)
 
 ## 目录
@@ -243,9 +243,9 @@ tail -n 20 ~/.dsh/logs/target-monitor/gate-trace.jsonl | jq -c .
 
 | 项 | 字符数 | 约合 token | 频率 |
 |---|---:|---:|---|
-| 系统提示词章节 | 433 | 110–160 | 每轮（同会话前缀稳定，可被 prompt cache 复用） |
-| 注入提醒 | 647 | 170–220 | 每次未声明收尾 |
-| 规范复述 | 306 | 80–100 | 每累计 3 次遗忘 |
+| 系统提示词章节 | 324 | 80–120 | 每轮（同会话前缀稳定，可被 prompt cache 复用） |
+| 注入提醒 | 409 | 105–140 | 每次未声明收尾 |
+| 规范复述 | 251 | 65–85 | 每累计 3 次遗忘 |
 
 真正的成本不是这些字符，而是**可能多一轮**：模型收到提醒后要先声明再汇报，多数场景下会多一次模型请求。实测 8 次注入全部在 8–19 秒内被响应，中位数约 9.6 秒——这段时间就是额外开销。
 
@@ -264,7 +264,7 @@ npm install
 bash scripts/link-host.sh   # 开发期链接宿主已安装的 @deepseek-ai 包
 
 npm run typecheck
-npm test                    # node --test，197 项
+npm test                    # node --test，198 项
 npm run build
 ```
 

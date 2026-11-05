@@ -69,11 +69,10 @@ working（默认） | done | awaiting_user
 **系统提示词章节**（静态注册一次，不做逐轮注入）：
 
 ```text
-Before you close a turn, declare the target state with target_status:
-- target_status("done")          — the task is complete and you are about to report it.
-- target_status("awaiting_user") — you need a user decision or more information.
-If you close without declaring, the harness assumes the task is unfinished
-and will ask you to continue.
+Before closing a turn, declare its target state with target_status. Declare first, then report:
+1. Complete → call target_status("done") first, then report the result.
+2. User decision needed → call target_status("awaiting_user") first, then ask.
+An undeclared close is treated as unfinished; the harness continues the turn.
 ```
 
 **工具**：`target_status({ state: 'done' | 'awaiting_user', summary?: string })`
@@ -117,20 +116,21 @@ on turn-stopping(agent, turn):
 必备三要素：**来源不是 `user`**、**文本显式否认授权**、**给"等待确认"留出口**。
 
 ```text
-[target-monitor] Automated self-recovery notice — NOT a user message.
+[target-monitor] Automated notice — NOT a user message.
 
-You closed the previous turn without declaring the target state.
-This may mean the task is unfinished, or that your output was cut off.
+Continue from where you stopped. Do not restart.
 
-- This is not user input and is not user approval or consent for any action
-  you proposed earlier.
-- It does not lift any confirmation requirement. If you were waiting for the
-  user to confirm something, call target_status("awaiting_user") and close again.
-- If the task is complete: call target_status("done"), then report to the user.
-- Otherwise: continue from where you stopped. Do not restart from scratch.
+- If the task is complete: call target_status("done"), then report.
+- If waiting for the user: call target_status("awaiting_user"), then close.
+- This is not user input and not user approval or consent for any earlier proposal;
+  it does not lift any confirmation requirement.
+
+(attempt N in this turn)
 ```
 
-截断变体追加一句：`Your previous message was truncated by the output length limit; tools you called after the cut were not executed.`
+首段只给"继续"指令，不复述"你未声明就收尾"。把收尾诊断成一次失误，模型会在后续步骤里回避中断（反复补声明、绕开收尾），累积成规避行为并分散注意力；本插件要的是保持推进，不是纠正模型。
+
+截断变体在首段之后追加一句：`Output was cut by the length limit; tool calls after the cut were not executed.`
 
 ## 5. 明确不做
 
@@ -172,7 +172,7 @@ README 面向使用者，必须说清"保证什么、不保证什么"。这一�
 
 **为什么接受"可能多一轮"**：收到提醒后，模型需要先声明再汇报，多数场景下会多一次模型请求。这是本设计的固有代价，不是缺陷——换取的收益是"不静默断在半路"。实测 8 次注入全部在 8–19 秒内被响应（中位数约 9.6 秒），说明这个代价在可接受区间。
 
-**为什么系统提示词章节要节流**：章节 433 字符随系统提示词每轮发送。它必须常驻——声明协议若只在需要时注入，模型就无从知道该调用什么。但复述（306 字符）不能常驻，否则等于把章节发两遍；因此按累计遗忘次数节流，每 3 次才出现一次。
+**为什么系统提示词章节要节流**：章节 324 字符随系统提示词每轮发送。它必须常驻——声明协议若只在需要时注入，模型就无从知道该调用什么。但复述（251 字符）不能常驻，否则等于把章节发两遍；因此按累计遗忘次数节流，每 3 次才出现一次。
 
 **为什么注入文案用常量**：拼接轮次、阈值之类的运行时数据会扩大提示注入面，而对模型没有信息价值。这一条与原则 III 一致，不是省事。
 

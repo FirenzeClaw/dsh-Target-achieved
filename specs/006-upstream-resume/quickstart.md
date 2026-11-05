@@ -42,7 +42,7 @@ jq -c 'select(.outcome == "injected")' ~/.dsh/logs/target-monitor/gate-trace.jso
 预期：
 
 1. 轮次以错误结束后，**不需要用户做任何操作**，几秒内自动开启新一轮；
-2. 新一轮里模型能看到 `[target-monitor] Automated self-recovery notice — NOT a user message.`；
+2. 新一轮里模型能看到 `[target-monitor] Automated notice — NOT a user message.`；
 3. 恢复上游后，该轮正常收尾并按协议声明 `target_status("done")`；
 4. 留痕中出现 `upstream-resumed`，`consecutive` 在该轮正常收尾后清零（可再触发一次失败验证重新从 1 开始计数）。
 

@@ -6,9 +6,9 @@
 
 ```text
 Reminder — the turn-closing rule:
-1. When the task is complete, call target_status("done") FIRST, then report the result.
-2. When you need a user decision, call target_status("awaiting_user") FIRST, then ask.
-Close without declaring and the harness will treat the turn as unfinished and ask you to continue.
+1. Complete → call target_status("done") first, then report.
+2. User decision needed → call target_status("awaiting_user") first, then ask.
+An undeclared close is treated as unfinished; the harness continues the turn.
 ```
 
 ## 插入位置
@@ -16,14 +16,14 @@ Close without declaring and the harness will treat the turn as unfinished and as
 追加在既有 `repairText(...)` 之后（即 `(attempt N in this turn)` 之后）、卡住提示之前，用空行分隔：
 
 ```text
-[target-monitor] Automated self-recovery notice — NOT a user message.
+[target-monitor] Automated notice — NOT a user message.
 ...
-- Otherwise: continue from where you stopped. Do not restart from scratch.
+Continue from where you stopped. Do not restart.
 
 Reminder — the turn-closing rule:
 1. ...
 2. ...
-Close without declaring and the harness will treat the turn as unfinished and ask you to continue.
+An undeclared close is treated as unfinished; the harness continues the turn.
 ```
 
 > 实现说明：`(attempt N)` 属于 `repairText` 的固定尾行。为了不改动既有文案结构，
