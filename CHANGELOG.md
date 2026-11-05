@@ -5,6 +5,17 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.1] - 2026-11-05
+
+### Fixed
+
+- **设置分区打开后一片空白**：客户端只注入了 `remote`，而 `ctx.remote` 是 typert 的远程代理，属性有独立访问门；渲染时读 `remote.settings` 抛出 `cannot get property "remote.settings" without inject`，宿主把整条 section 判为崩溃并撤下（导航项还在，内容区空）。现声明为 `inject = ['remote', 'remote.settings', 'slots']`，并加了两条针对产物 `inject` 与分区注册的回归测试——这个错误类型检查发现不了，只有真机渲染才暴露。
+- **`stallNoticeThreshold` 在设置页里读不到也写不进**：宿主只把 `.volatile()` 字段交给设置文档，该字段此前不是 volatile，`SettingsNamespaceView.value` 里根本没有这个键。现改为 volatile，八个字段全部可见可写。
+
+### Changed
+
+- 设置分区的命名空间识别改为先按条目 id（`target-monitor`）精确匹配，特征字段只作兜底——实测 `value` 可能缺键，不能拿字段存在性当唯一判据。
+
 ## [0.4.0] - 2026-11-05
 
 ### Added

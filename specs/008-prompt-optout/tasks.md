@@ -24,7 +24,7 @@
 
 ## Phase 4: US2 设置界面全量接管（P2）
 
-- [x] T012 `src/client/index.ts`：字段表（八项）、`FieldSpec`、`findNamespace` 按特征字段识别
+- [x] T012 `src/client/index.ts`：字段表（八项）、`FieldSpec`、`findNamespace` 按条目 id 精确匹配（特征字段兜底）
 - [x] T013 分区组件：加载态、错误态、只读态、字段渲染
 - [x] T014 写回：`settings.update(ns, patch, revision)`，成功后用返回值刷新快照
 - [x] T015 冲突与失败提示（含 `SETTINGS_CONFLICT` 专有文案）
@@ -39,11 +39,13 @@
 
 - [x] T019 `npm run typecheck`（两个工程）通过
 - [x] T020 `npm run build` 产出 `dist/client.js`（11 518 字节）
-- [x] T021 `npm test` 191 项全通过
+- [x] T021 `npm test` 195 项全通过
 - [x] T022 真实实例 `dsh web --port 3097` 启动无 `entry did not activate`、无 `missing bundle`
 - [x] T023 确认宿主把本插件编进启动图：组合脚本内含 `id: "dsh-target-monitor"` 与 `settings.section`
-- [ ] T024 在浏览器里实际打开「设置 → 目标监测」并逐项操作（需人工或设备自动化）
+- [x] T024 在浏览器里实际打开「设置 → 目标监测」并逐项操作（隔离 profile + 临时实例 `--port 3099`）
 - [ ] T025 验证复制按钮在真实剪贴板下的行为
+- [x] T026 修复「分区打开后空白」：客户端补 `remote.settings` 注入（typert 属性级访问门），并加产物级回归测试
+- [x] T027 修复「`stallNoticeThreshold` 读不到写不进」：改为 volatile，使八个字段全部可见可写
 
 ## 依赖
 
@@ -51,4 +53,6 @@ US1 与 US2/US3 相互独立：前者是服务端守卫，后者是客户端分�
 
 ## 未完成说明
 
-T024/T025 需要真实浏览器交互，本会话未做。当前已证到"宿主收录并服务该 bundle"，未证到"分区渲染正确"。
+T025 需要真实剪贴板，未做。
+
+T024 已完成，并因此发现两个只在真机渲染时暴露的缺陷（T026/T027）：分区注册、id 匹配、bundle 打包都是对的，问题出在**注入声明**与**字段的 volatile 属性**上。证据：点击分区后面板为空白，DOM 里是 `<div data-slot-error="settings.section">`，控制台 `slot entry crashed in 'settings.section': Error: cannot get property "remote.settings" without inject`。修复后八字段全部渲染，改写 `stallNoticeThreshold` 为 7 并刷新仍为 7（已还原为 5）。

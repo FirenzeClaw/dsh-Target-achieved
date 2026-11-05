@@ -9,11 +9,11 @@ import { resolveConfig, snapshot } from '../../src/config.ts'
 test('空配置使用默认值（enabled 为 volatile 引用）', () => {
   const config = resolveConfig({})
   assert.equal(config.enabled.get(), true)
-  assert.equal(config.stallNoticeThreshold, 5)
+  assert.equal(config.stallNoticeThreshold.get(), 5)
 })
 
 test('合法自定义阈值被保留', () => {
-  assert.equal(resolveConfig({ stallNoticeThreshold: 2 }).stallNoticeThreshold, 2)
+  assert.equal(resolveConfig({ stallNoticeThreshold: 2 }).stallNoticeThreshold.get(), 2)
 })
 
 test('阈值 0 / 负数 / 非整数 / 非数字都抛出，且错误信息含字段名', () => {
@@ -40,9 +40,10 @@ test('宿主已解析的配置（volatile 字段是引用）不得再跑一遍 s
   // 真实宿主解析后一定包含全部字段（schema 会填默认值），这里如实模拟。
   const resumeOnUpstreamError = Object.freeze({ get: () => true })
   const maxResumes = Object.freeze({ get: () => 2 })
+  const stallNoticeThreshold = Object.freeze({ get: () => 3 })
   const config = resolveConfig({
     enabled,
-    stallNoticeThreshold: 3,
+    stallNoticeThreshold,
     reminderThreshold,
     reactionWindowMs,
     resumeOnUpstreamError,
@@ -53,15 +54,26 @@ test('宿主已解析的配置（volatile 字段是引用）不得再跑一遍 s
   assert.equal(config.reminderThreshold, reminderThreshold)
   assert.equal(config.reactionWindowMs, reactionWindowMs)
   assert.equal(config.enabled.get(), false)
-  assert.equal(config.stallNoticeThreshold, 3)
+  assert.equal(config.stallNoticeThreshold, stallNoticeThreshold, '阈值同样必须原样保留引用')
 })
 
 test('已解析路径下的非法阈值仍然抛出', () => {
   const enabled = Object.freeze({ get: () => true })
   const reminderThreshold = Object.freeze({ get: () => 3 })
   const reactionWindowMs = Object.freeze({ get: () => 30_000 })
+  // 设置页把 0 写进配置后，下一次判定必须立刻报错，而不是静默当成 0 用。
   assert.throws(
-    () => resolveConfig({ enabled, stallNoticeThreshold: 0, reminderThreshold, reactionWindowMs }),
+    () => resolveConfig({ enabled, stallNoticeThreshold: Object.freeze({ get: () => 0 }), reminderThreshold, reactionWindowMs }),
+    /stallNoticeThreshold/,
+  )
+})
+
+test('已解析路径下阈值若不是引用则抛出，不得静默当普通值用', () => {
+  const enabled = Object.freeze({ get: () => true })
+  const reminderThreshold = Object.freeze({ get: () => 3 })
+  const reactionWindowMs = Object.freeze({ get: () => 30_000 })
+  assert.throws(
+    () => resolveConfig({ enabled, stallNoticeThreshold: 5, reminderThreshold, reactionWindowMs }),
     /stallNoticeThreshold/,
   )
 })
@@ -71,7 +83,12 @@ test('已解析路径下 volatile 阈值非法时抛出，并指明字段', () =
   const reactionWindowMs = Object.freeze({ get: () => 30_000 })
   // 设置页写入 0 时应当立刻报错，而不是等到某次判定读到它才行为异常。
   assert.throws(
-    () => resolveConfig({ enabled, stallNoticeThreshold: 5, reminderThreshold: Object.freeze({ get: () => 0 }), reactionWindowMs }),
+    () => resolveConfig({
+      enabled,
+      stallNoticeThreshold: Object.freeze({ get: () => 5 }),
+      reminderThreshold: Object.freeze({ get: () => 0 }),
+      reactionWindowMs,
+    }),
     /reminderThreshold/,
   )
 })
@@ -132,7 +149,13 @@ test('已解析配置里续行字段若不是引用则抛出，不得静默当�
   const reminderThreshold = Object.freeze({ get: () => 3 })
   const reactionWindowMs = Object.freeze({ get: () => 30_000 })
   assert.throws(
-    () => resolveConfig({ enabled, reminderThreshold, reactionWindowMs, resumeOnUpstreamError: true }),
+    () => resolveConfig({
+      enabled,
+      stallNoticeThreshold: Object.freeze({ get: () => 5 }),
+      reminderThreshold,
+      reactionWindowMs,
+      resumeOnUpstreamError: true,
+    }),
     /resumeOnUpstreamError/,
   )
 })
@@ -145,6 +168,7 @@ test('已解析配置里续行字段的非法取值同样抛出（设置页写�
     () =>
       resolveConfig({
         enabled,
+        stallNoticeThreshold: Object.freeze({ get: () => 5 }),
         reminderThreshold,
         reactionWindowMs,
         resumeOnUpstreamError: Object.freeze({ get: () => true }),

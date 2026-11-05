@@ -38,7 +38,7 @@
 
 ---
 
-### User Story 2 - 设置界面全量接管七个字段 (Priority: P2)
+### User Story 2 - 设置界面全量接管八个字段 (Priority: P2)
 
 用户打开设置页，看到「Target Monitor」分区，里面有全部七个配置项，每项带一句说明。改动立即生效，不需要重启；两个窗口同时开着改，后提交的一方会收到冲突提示而不是静默覆盖。
 
@@ -92,7 +92,8 @@
 - **FR-005**: `declarationSection` 为 `false` 时，插件 MUST NOT 执行上游续行的投递（它与收尾门共用同一条自救通道，且依赖 `target_status` 收尾）。
 - **FR-006**: 开关变化 MUST 只影响此后新建立的注册与新开始的轮次，MUST NOT 中断正在进行的轮次。
 - **FR-007**: 插件 MUST 注册一个自定义设置分区（`settings.section`，id 为 `target-monitor`），承载全部配置项。
-- **FR-008**: 该分区 MUST 展示七个字段：`enabled`、`stallNoticeThreshold`、`reminderThreshold`、`reactionWindowMs`、`resumeOnUpstreamError`、`maxResumes`、`declarationSection`。
+- **FR-008**: 该分区 MUST 展示八个字段：`enabled`、`stallNoticeThreshold`、`reminderThreshold`、`reactionWindowMs`、`resumeOnUpstreamError`、`maxResumes`、`declarationSection`、`crossProcess`。
+  - 实现说明：宿主只把 `.volatile()` 字段交给设置文档（`dsh-settings/README.md`「Forms expose only volatile fields」），因此 `stallNoticeThreshold` 也改为 volatile，否则它既不出现在 `value` 里、也无法从界面写入；`crossProcess` 是 007 引入的第八个开关，原规格写作七项时尚未存在。
 - **FR-009**: 每个字段 MUST 附带一句说明，说明其作用与影响范围。
 - **FR-010**: 修改 MUST 通过宿主的设置写回接口完成，写入时 MUST 携带读取时取得的 revision。
 - **FR-011**: 写入冲突时 MUST 提示用户并重新加载为最新值，MUST NOT 静默覆盖他人修改。

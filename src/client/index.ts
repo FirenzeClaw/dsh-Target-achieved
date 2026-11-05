@@ -17,7 +17,16 @@ declare const __TM_DECLARATION_TEXT__: string
 declare const __TM_AGENTS_SNIPPET__: string
 
 export const name = 'target-monitor-client'
-export const inject = ['remote', 'slots']
+/**
+ * 依赖声明。
+ *
+ * `remote.settings` 必须**单独列出**：`ctx.remote` 是 typert 的远程代理，每个属性
+ * 有独立的访问门。只注入 `remote` 时，`ctx.remote.settings` 在读取那一刻抛出
+ * `cannot get property "remote.settings" without inject`；抛出点在组件渲染期，
+ * 宿主会把整条 section 判为崩溃并撤下——面板一片空白，控制台只有一行
+ * `slot entry crashed in 'settings.section'`。类型检查发现不了这个错，所以留注释。
+ */
+export const inject = ['remote', 'remote.settings', 'slots']
 
 /** 宿主 Remote 的返回形状：成功带 value，失败带 error。 */
 type RemoteResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: RemoteFailure }
@@ -56,6 +65,9 @@ interface ClientContext {
     register(options: Record<string, unknown>, component: (props: Record<string, unknown>) => unknown): () => void
   }
 }
+
+/** profile 里本插件条目的 id；见 `dsh.bundle.patch` 与 `cordis.patch.yml` 的 insert 条目。 */
+const NAMESPACE_ID = 'target-monitor'
 
 type FieldKind = 'boolean' | 'number'
 
@@ -121,8 +133,20 @@ const FIELDS: readonly FieldSpec[] = [
   },
 ]
 
-/** 从设置视图里认出本插件的命名空间：认特征字段，不依赖条目 id 的拼写。 */
+/**
+ * 从设置视图里认出本插件的命名空间。
+ *
+ * 主路径按 `ns` 精确匹配 profile 里的条目 id（`target-monitor`），因为它由
+ * `cordis.patch.yml` 的 insert 条目决定、不会随字段增减变化；末尾匹配用于容忍
+ * 用户把条目改成带前缀的写法。特征字段只作兜底——实测 `value` 里**不含**
+ * `stallNoticeThreshold`（该字段没有 schema 默认值，未显式配置时整键缺省），
+ * 所以不能拿它当唯一判据。
+ */
 function findNamespace(namespaces: readonly SettingsNamespaceView[]): SettingsNamespaceView | undefined {
+  const exact = namespaces.find((view) => view.ns === NAMESPACE_ID)
+  if (exact !== undefined) return exact
+  const suffixed = namespaces.find((view) => view.ns.endsWith(`-${NAMESPACE_ID}`) || view.ns.endsWith(`/${NAMESPACE_ID}`))
+  if (suffixed !== undefined) return suffixed
   return namespaces.find((view) => {
     const value = view.value
     return typeof value === 'object' && value !== null && 'stallNoticeThreshold' in value

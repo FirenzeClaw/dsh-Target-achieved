@@ -54,3 +54,82 @@ test('bundle 内联了规范正文，与宿主常量一致', { skip: !built }, a
   const declarationText = promptModule.DECLARATION_SECTION as string
   assert.ok(bundle.includes(JSON.stringify(declarationText)), '客户端复制的规范正文必须来自宿主构建产物')
 })
+
+test('bundle 声明了 remote.settings 注入，否则设置分区会在渲染期崩溃', { skip: !built }, async () => {
+  // 回归：typert 远程代理的属性有独立访问门。只注入 `remote` 时，组件里读
+  // `ctx.remote.settings` 会抛 `cannot get property "remote.settings" without inject`；
+  // 抛出点在渲染期，宿主把整条 section 撤下（面板空白），类型检查发现不了。
+  const vm = await import('node:vm')
+  let loaded: { inject?: unknown } | undefined
+  const sandbox = {
+    window: {
+      __ModuleLoader__: {
+        load: ({ factory }: { factory: (require: (name: string) => unknown) => { inject?: unknown } }) => {
+          loaded = factory((name: string) => {
+            if (name === 'react') {
+              return {
+                useState: (init: unknown) => [typeof init === 'function' ? (init as () => unknown)() : init, () => {}],
+                useEffect: () => {},
+                useMemo: (fn: () => unknown) => fn(),
+                useRef: (value: unknown) => ({ current: value }),
+              }
+            }
+            if (name === 'react/jsx-runtime') {
+              return { jsx: () => null, jsxs: () => null, Fragment: 'Fragment' }
+            }
+            throw new Error(`unexpected require: ${name}`)
+          })
+        },
+      },
+    },
+    navigator: { clipboard: { writeText: async () => {} } },
+    console,
+  }
+  vm.createContext(sandbox)
+  vm.runInContext(bundle, sandbox)
+
+  const inject = loaded?.inject
+  assert.ok(Array.isArray(inject), 'bundle 必须导出 inject 数组')
+  assert.ok(inject.includes('remote.settings'), "inject 必须含 'remote.settings'")
+  assert.ok(inject.includes('slots'), "inject 必须含 'slots'")
+})
+
+test('bundle 把分区注册到 settings.section，id 与 profile 条目一致', { skip: !built }, async () => {
+  const vm = await import('node:vm')
+  const registered: { options?: Record<string, unknown> }[] = []
+  let loaded: { apply?: (context: unknown) => void } | undefined
+  const sandbox = {
+    window: {
+      __ModuleLoader__: {
+        load: ({ factory }: { factory: (require: (name: string) => unknown) => { apply?: (context: unknown) => void } }) => {
+          loaded = factory((name: string) => {
+            if (name === 'react') {
+              return { useState: (init: unknown) => [init, () => {}], useEffect: () => {}, useMemo: (fn: () => unknown) => fn(), useRef: () => ({}) }
+            }
+            if (name === 'react/jsx-runtime') return { jsx: () => null, jsxs: () => null, Fragment: 'Fragment' }
+            throw new Error(`unexpected require: ${name}`)
+          })
+        },
+      },
+    },
+    navigator: { clipboard: { writeText: async () => {} } },
+    console,
+  }
+  vm.createContext(sandbox)
+  vm.runInContext(bundle, sandbox)
+
+  loaded?.apply?.({
+    remote: { settings: { describe: async () => ({ ok: true, value: { writable: true, namespaces: [] } }) } },
+    slots: {
+      inject: (_name: string, register: () => unknown) => register(),
+      register: (options: Record<string, unknown>) => {
+        registered.push({ options })
+        return () => {}
+      },
+    },
+  })
+
+  const entry = registered.find((item) => item.options?.['name'] === 'settings.section')
+  assert.ok(entry !== undefined, '必须注册 settings.section 分区')
+  assert.equal(entry.options?.['id'], 'target-monitor', '分区 id 必须与 profile 条目 id 一致')
+})

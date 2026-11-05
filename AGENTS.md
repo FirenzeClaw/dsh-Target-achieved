@@ -74,9 +74,9 @@ DSH-Target-achieved/
 - 守护进程手工验证：`node dist/daemon/main.js --socket /tmp/tm.sock --pid /tmp/tm.pid`（前台跑，Ctrl-C 退出）
 - 挂载：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
 
-**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 192 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。007 的跨进程能力用真实 socket 集成测试与手工双客户端验证（共享计数、强杀后自愈、宽限退出），**尚未在真实多入口场景长期观察**。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 195 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。007 的跨进程能力用真实 socket 集成测试与手工双客户端验证（共享计数、强杀后自愈、宽限退出），**尚未在真实多入口场景长期观察**。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
 
-**版本**：`0.4.0`（设置界面改由客户端插件接管）。`0.2.0` 为上游异常自动续行，`0.1.0` 为首个正式发布。四个版本都已打 tag 并推送：`v0.1.0`（首个发布）、`v0.2.0`（上游续行）、`v0.3.0`（跨进程守护）、`v0.4.0`（设置界面接管）。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
+**版本**：`0.4.1`（修复设置分区空白与阈值不可调）。`0.2.0` 为上游异常自动续行，`0.1.0` 为首个正式发布。四个版本都已打 tag 并推送：`v0.1.0`（首个发布）、`v0.2.0`（上游续行）、`v0.3.0`（跨进程守护）、`v0.4.0`（设置界面接管）、`v0.4.1`（设置分区两处修复）。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
 
 **守护进程生命周期（2026-11-05）**：连接计数 + 宽限。客户端是**常驻连接**（`src/monitor/remote.ts` 缓存 `client`），因此"最后一个连接断开"等价于"最后一个 DSH 进程退出"。宽限 30 秒后退出并删除 socket/pid；`SIGTERM`/`SIGINT` 也清理。`--grace <ms>` 可缩短宽限，供测试与手工验证真实退出路径（`tests/integration/daemon-exit.test.ts` 用子进程验证）。
 
@@ -125,6 +125,9 @@ DSH-Target-achieved/
 - 模块表里有 `react`、`react/jsx-runtime`、`@deepseek-ai/dsh-client-ui-primitives` 等；实测宿主自身的客户端产物开头与本包一致。
 - 分区注册：`ctx.slots.inject("settings.section", () => ctx.slots.register({ name, id, order, label }, Component))`，客户端 `inject` 至少含 `slots`。
 - 配置读写：`ctx.remote.settings.describe()` / `update(ns, patch, expectedRevision)`；返回 `RemoteResult<T> = { ok: true, value } | { ok: false, error }`；冲突码 `SETTINGS_CONFLICT`。
+- **`remote.settings` 必须单独注入**：`inject = ['remote', 'remote.settings', 'slots']`。typert 远程代理的属性有独立访问门，只注入 `remote` 时读 `ctx.remote.settings` 会抛 `cannot get property "remote.settings" without inject`；抛出点在组件渲染期，宿主把整条 section 撤下（面板空白，控制台只有 `slot entry crashed in 'settings.section'`），类型检查发现不了。
+- **设置文档只包含 volatile 字段**：`SettingsNamespaceView.value` 里只有 `.volatile()` 声明的键。非 volatile 字段既读不到也写不进，所以要让某项可在界面调节，必须先把它改成 volatile（`stallNoticeThreshold` 就是这么改的）。
+- 分区 id 必须与 profile 条目 id 一致（`target-monitor`）：宿主按 `id` 做 `only` 过滤，nav 有项但面板空白通常意味着渲染期抛错被撤下，而不是 id 不匹配。
 - 本包的构建方式：`tsc -p tsconfig.client.json` 出 CommonJS，再由 `scripts/build-client.mjs` 套包装（**不引入 bundler**）；客户端因此必须单文件。
 
 **本机路径**（只读参考，不要修改宿主安装）：

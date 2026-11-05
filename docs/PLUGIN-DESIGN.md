@@ -265,3 +265,28 @@ CommonJS，依赖经裸模块名从宿主模块表取（`dsh-client-modules/READ
 **为什么该开关需要重启**：它决定的是"注册什么"，而章节与工具在 `apply` 时
 一次性注册，运行中无法撤销。`enabled` 等其余开关只影响判定时的分支，所以仍
 即时生效。这个区别写进了 README 的配置表与分区说明，避免"改了没反应"的困惑。
+
+## 12. 设置分区的两处真实缺陷（2026-11-05）
+
+真机渲染暴露了两个**类型检查发现不了**的问题。两者都在 008 的验收阶段才出现，
+说明"产物被打包、宿主收录、导航项出现"这一串绿灯不足以证明分区可用。
+
+**注入要写到属性级**。`ctx.remote` 是 typert 的远程代理，`settings` 是它的一个
+属性，访问门按属性登记。`inject = ['remote']` 只拿到代理本身，读 `remote.settings`
+时抛出 `cannot get property "remote.settings" without inject`。抛出点在组件渲染期，
+宿主的 `SlotErrorBoundary` 会捕获并把整条 entry **撤下**（abdicate），于是面板
+是一片空白而不是一条错误——控制台只有一行 `slot entry crashed in 'settings.section'`。
+正确写法是 `inject = ['remote', 'remote.settings', 'slots']`。
+
+代价与取舍：多写一个字符串，换来"渲染期崩溃"变成"启动期报错"（缺依赖时 cordis
+会明确说缺谁）。回归测试直接对 `dist/client.js` 断言 `inject` 含 `remote.settings`——
+因为这个问题只有在浏览器里才会炸，而单测跑不到浏览器。
+
+**设置文档只包含 volatile 字段**。`SettingsNamespaceView.value` 里只有
+`.volatile()` 声明的键；非 volatile 字段既读不到也写不进。`stallNoticeThreshold`
+此前不是 volatile，于是它在分区里永远显示为空，改动也提交不上去。要让它可调，
+必须先把它变成 volatile——这不只是 UI 问题，也改变了配置的读取方式
+（`snapshot()` 里从直接取值改成 `.get()`）。
+
+因此判断"某个字段能不能在设置页调"，标准不是"它在 schema 里"，而是
+"它是不是 volatile"。新增可调字段时，先看这一点。

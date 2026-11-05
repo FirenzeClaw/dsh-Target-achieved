@@ -100,7 +100,7 @@ dsh plugin --profile web add /path/to/DSH-Target-achieved
 | `enabled` | boolean | `true` | 是 | 总开关；关闭时判定直接放行，工具拒绝声明 |
 | `reminderThreshold` | 正整数 | `3` | 是 | 累计几次遗忘后复述一次声明规范 |
 | `reactionWindowMs` | 正整数 | `30000` | 是 | 注入后多久内的声明算作"被提醒才想起来" |
-| `stallNoticeThreshold` | 正整数 | `5` | 否 | 本轮第几次未声明时向用户发"可能卡住"提示 |
+| `stallNoticeThreshold` | 正整数 | `5` | 是 | 本轮第几次未声明时向用户发"可能卡住"提示 |
 | `resumeOnUpstreamError` | boolean | `true` | 是 | 上游可重试错误后是否自动续行 |
 | `maxResumes` | 非负整数 | `3` | 是 | 连续续行上限；`0` 等价于关闭自动续行 |
 | `crossProcess` | boolean | `true` | 是 | 是否使用跨进程守护；关闭后强制进程内判定（启动期生效） |
@@ -114,7 +114,7 @@ dsh plugin --profile web add /path/to/DSH-Target-achieved
 
 写回走宿主的 `settings.update` 并带 `revision`：若同一份配置在别处被改过，保存会被拒绝并提示刷新，而不是静默覆盖。
 
-关闭 `declarationSection` 后，分区里会出现一段可直接写进用户级 `AGENTS.md`（`~/.dsh/AGENTS.md`）的文本，并配两个复制按钮（规范正文 / `AGENTS.md` 片段）。文本由构建期从宿主侧常量注入客户端产物，因此设置页复制的与真实注入的永远一致。`stallNoticeThreshold` 参与告警节奏，热改语义尚未在真实会话中验证，当前只支持通过 `cordis.patch.yml` 修改。
+关闭 `declarationSection` 后，分区里会出现一段可直接写进用户级 `AGENTS.md`（`~/.dsh/AGENTS.md`）的文本，并配两个复制按钮（规范正文 / `AGENTS.md` 片段）。文本由构建期从宿主侧常量注入客户端产物，因此设置页复制的与真实注入的永远一致。`stallNoticeThreshold` 在 0.4.1 起改为 volatile，可直接在分区里改；热改是否真的改变告警节奏尚未在真实会话中验证。
 
 非法值在保存或启动时抛出并指明字段，不回退默认值——静默回退会让"改了没反应"成为最难排查的一类故障。
 

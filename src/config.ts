@@ -34,7 +34,7 @@ export const Config = z.object({
   /** 总开关；关闭时收尾门不注入、工具直接拒绝声明。 */
   enabled: z.boolean().default(true).volatile(),
   /** 第几次未声明时向用户发出"可能卡住"提示。必须是正安全整数。 */
-  stallNoticeThreshold: z.number().default(DEFAULT_STALL_NOTICE_THRESHOLD),
+  stallNoticeThreshold: z.number().default(DEFAULT_STALL_NOTICE_THRESHOLD).volatile(),
   /** 累计几次遗忘后复述一次规范。必须是正安全整数。 */
   reminderThreshold: z.number().default(DEFAULT_REMINDER_THRESHOLD).volatile(),
   /** 注入后多久内的声明算作被提醒后才想起来的。必须是正安全整数。 */
@@ -52,7 +52,7 @@ export const Config = z.object({
 /** 宿主解析后的配置：volatile 字段是稳定引用，需 `.get()` 取当前值。 */
 export interface ResolvedConfig {
   enabled: Volatile<boolean>
-  stallNoticeThreshold: number
+  stallNoticeThreshold: Volatile<number>
   reminderThreshold: Volatile<number>
   reactionWindowMs: Volatile<number>
   resumeOnUpstreamError: Volatile<boolean>
@@ -207,11 +207,13 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
   const input = (raw ?? {}) as Record<string, unknown>
 
   if (isVolatileRef<boolean>(input['enabled'])) {
-    assertPositiveInt(input['stallNoticeThreshold'], 'stallNoticeThreshold', DEFAULT_STALL_NOTICE_THRESHOLD)
     return {
       enabled: input['enabled'],
-      // 非 volatile 字段在已解析形态下就是普通数字，直接沿用。
-      stallNoticeThreshold: input['stallNoticeThreshold'] as number,
+      stallNoticeThreshold: assertVolatilePositiveInt(
+        input['stallNoticeThreshold'],
+        'stallNoticeThreshold',
+        DEFAULT_STALL_NOTICE_THRESHOLD,
+      ),
       reminderThreshold: assertVolatilePositiveInt(
         input['reminderThreshold'],
         'reminderThreshold',
@@ -244,7 +246,7 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
 export function snapshot(config: ResolvedConfig): TargetMonitorConfig {
   return {
     enabled: config.enabled.get() !== false,
-    stallNoticeThreshold: config.stallNoticeThreshold,
+    stallNoticeThreshold: config.stallNoticeThreshold.get(),
     reminderThreshold: config.reminderThreshold.get(),
     reactionWindowMs: config.reactionWindowMs.get(),
     resumeOnUpstreamError: config.resumeOnUpstreamError.get() !== false,
