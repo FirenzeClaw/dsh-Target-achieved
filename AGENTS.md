@@ -32,6 +32,10 @@ DSH-Target-achieved/
 │   ├── cause.ts               # FinishReason → StopCause
 │   ├── gate.ts                # 收尾门判定与注入策略
 │   ├── tool.ts                # target_status 工具
+│   ├── paths.ts               # $DSH_HOME 解析（socket / pid / 日志目录）
+│   ├── monitor/               # 判定通道：types / plan（纯函数）/ compose / local / remote
+│   ├── ipc/                   # 守护进程传输：protocol / client / launcher
+│   ├── daemon/                # 守护进程：main（生命周期）/ server（分发）/ state（状态表）
 │   ├── prompt.ts              # 系统提示词章节与固定文案
 │   ├── notices.ts             # 消息来源归属与构造
 │   └── turn.ts                # 轮次来源（声明与判定共用）
@@ -46,7 +50,9 @@ DSH-Target-achieved/
 │   ├── 002-turn-key-alignment/ # 轮次键对齐：声明与判定共用同一轮次
 │   ├── 004-observability-and-packaging/  # 留痕 / 设置页 / 可分发
 │   ├── 005-declaration-reminder/         # 声明规范复述
-│   └── 006-upstream-resume/              # 上游异常自动续行
+│   ├── 006-upstream-resume/              # 上游异常自动续行
+│   ├── 007-daemon/                       # 跨进程监测守护
+│   └── 008-prompt-optout/                # 初始注入开关与设置界面接管
 ├── .specify/                  # speckit 脚手架
 │   └── memory/constitution.md # 项目宪法（v1.1.0）
 └── .dsh/skills/               # speckit-* 技能
@@ -62,11 +68,12 @@ DSH-Target-achieved/
 - 构建：`npm run build` → `tsc -p tsconfig.json`，产物在 `dist/`，`.ts` 导入后缀会被重写为 `.js`
 - 类型检查：`npm run typecheck` → `tsc -p tsconfig.json --noEmit`
 - 测试：`npm test` → `node --test`（Node 24 原生类型剥离，零测试框架依赖）
+- 守护进程手工验证：`node dist/daemon/main.js --socket /tmp/tm.sock --pid /tmp/tm.pid`（前台跑，Ctrl-C 退出）
 - 挂载：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
 
-**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 128 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 182 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。007 的跨进程能力用真实 socket 集成测试与手工双客户端验证（共享计数、强杀后自愈、宽限退出），**尚未在真实多入口场景长期观察**。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
 
-**版本**：`0.2.0`（新增上游异常自动续行；tag `v0.2.0`）。`0.1.0` 为首个正式发布。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
+**版本**：`0.3.0`（新增跨进程守护；tag 待打）。`0.2.0` 为上游异常自动续行，`0.1.0` 为首个正式发布。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
 
 **发布**：npm 与 git 双通道，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`。`package.json` 含 `dsh.manifestVersion: 1` + `dsh.bundle.patch`，支持 bundle / git / 本地 link 三种安装方式。
 

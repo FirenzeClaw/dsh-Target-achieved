@@ -13,6 +13,15 @@ import { join } from 'node:path'
 const root = new URL('../..', import.meta.url).pathname
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as Record<string, unknown>
 
+test('守护进程入口随包分发（spec 007）', () => {
+  const files = manifest.files as string[]
+  assert.ok(files.includes('dist'), 'files 必须包含 dist')
+  // 入口是 dist/daemon/main.js：拉起逻辑按 import.meta.url 相对解析，
+  // 少发这个文件等于跨进程模式在安装后立刻失效。
+  const daemonMain = new URL('../../dist/daemon/main.js', import.meta.url)
+  assert.equal(existsSync(daemonMain), true, 'dist/daemon/main.js 必须存在（先 npm run build）')
+})
+
 test('不得带 private 标记（否则安装器拒绝作为 bundle 发布）', () => {
   assert.equal(manifest['private'], undefined)
 })

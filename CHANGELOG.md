@@ -5,7 +5,17 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.3.0] - 2026-11-05
+
+### Added
+
+- 跨进程守护：判定状态与留痕写入集中到一个独立进程，多个 DSH 入口共享同一份遗忘与续行计数，留痕不再有并发交错（spec 007）。
+- `crossProcess` 配置项：可强制退回进程内判定。
+
+### Changed
+
+- `agent/turn-stopping` 监听器在跨进程模式下改为异步，依赖宿主 `dispatch.serial` 的 await；进程内模式仍同步注入。
+
 
 ## [0.2.0] - 2026-11-05
 

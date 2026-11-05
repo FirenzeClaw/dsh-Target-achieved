@@ -99,10 +99,29 @@ dsh plugin --profile web add /path/to/DSH-Target-achieved
 | `stallNoticeThreshold` | 正整数 | `5` | 否 | 本轮第几次未声明时向用户发"可能卡住"提示 |
 | `resumeOnUpstreamError` | boolean | `true` | 是 | 上游可重试错误后是否自动续行 |
 | `maxResumes` | 非负整数 | `3` | 是 | 连续续行上限；`0` 等价于关闭自动续行 |
+| `crossProcess` | boolean | `true` | 是 | 是否使用跨进程守护；关闭后强制进程内判定（启动期生效） |
+| `declarationSection` | boolean | `true` | 是 | 是否注入声明规范；关闭后工具与收尾门一并停用（启动期生效） |
 
-标记为"设置页"的字段声明为 `volatile`，改动后立即生效，无需重启。`stallNoticeThreshold` 参与告警节奏，热改语义尚未在真实会话中验证，当前只支持通过 `cordis.patch.yml` 修改。
+标记为"设置页"的字段声明为 `volatile`，改动后立即生效，无需重启。两个例外是 `crossProcess` 与 `declarationSection`：它们决定**注册什么**（socket 连接、系统提示词章节、工具），因此按启动时取值，改动需重启 DSH。`stallNoticeThreshold` 参与告警节奏，热改语义尚未在真实会话中验证，当前只支持通过 `cordis.patch.yml` 修改。
 
 非法值在保存或启动时抛出并指明字段，不回退默认值——静默回退会让"改了没反应"成为最难排查的一类故障。
+
+## 跨进程守护
+
+多个 DSH 进程（web、CLI、临时实例）会共用同一个守护进程，判定状态与留痕写入都在它那里，因此遗忘计数跨入口累计、留痕不会交错。
+
+- socket 与 pid 文件在 `$DSH_HOME/run/`（`target-monitor.sock` / `.pid`），权限 `0600`/`0700`
+- 第一个 DSH 启动时自动拉起，最后一个退出后等 30 秒再退出
+- 守护进程起不来、被强杀或协议版本不匹配时，插件退回进程内判定，功能不变，只是计数不再跨进程共享（每个进程只告警一次）
+
+排查：
+
+```bash
+ls -l "$DSH_HOME/run"                                  # 有无 socket/pid
+ps -p "$(cat "$DSH_HOME/run/target-monitor.pid")"      # 进程是否还在
+```
+
+要强制单进程模式（例如受限环境不允许后台进程），在 profile 配置里设 `crossProcess: false`。
 
 ## 工作原理
 

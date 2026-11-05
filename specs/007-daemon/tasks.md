@@ -29,8 +29,8 @@ description: "Task list for 跨进程监测守护"
 
 **Purpose**: 建立模块骨架，不写业务逻辑
 
-- [ ] T001 创建 `src/ipc/`、`src/daemon/`、`src/monitor/` 三个目录与空模块文件（`protocol.ts`、`client.ts`、`launcher.ts`、`main.ts`、`server.ts`、`state.ts`、`types.ts`、`local.ts`、`remote.ts`），每个文件只写模块级 JSDoc
-- [ ] T002 [P] 创建测试骨架 `tests/unit/ipc-protocol.test.ts`、`tests/unit/daemon-state.test.ts`、`tests/unit/launcher.test.ts`、`tests/integration/daemon-lifecycle.test.ts`、`tests/integration/daemon-degrade.test.ts`、`tests/integration/daemon-multiprocess.test.ts`、`tests/contract/monitor-parity.test.ts`，确认 `npm test` 能发现它们且既有 98 项仍全绿
+- [x] T001 创建 `src/ipc/`、`src/daemon/`、`src/monitor/` 三个目录与空模块文件（`protocol.ts`、`client.ts`、`launcher.ts`、`main.ts`、`server.ts`、`state.ts`、`types.ts`、`local.ts`、`remote.ts`），每个文件只写模块级 JSDoc
+- [x] T002 [P] 创建测试骨架 `tests/unit/ipc-protocol.test.ts`、`tests/unit/daemon-state.test.ts`、`tests/unit/launcher.test.ts`、`tests/integration/daemon-lifecycle.test.ts`、`tests/integration/daemon-degrade.test.ts`、`tests/integration/daemon-multiprocess.test.ts`、`tests/contract/monitor-parity.test.ts`，确认 `npm test` 能发现它们且既有 98 项仍全绿
 
 ---
 
@@ -42,15 +42,15 @@ description: "Task list for 跨进程监测守护"
 
 ### 测试
 
-- [ ] T003 [P] 在 `tests/unit/ipc-protocol.test.ts` 写用例：编码为单行 JSON（含换行时不得出现在字符串内）；解码拒绝非 JSON、拒绝超 64 KiB；`turn` 非负整数校验；未知 `type` 返回 `E_BAD_REQUEST`——先看它失败
-- [ ] T004 [P] 在 `tests/unit/ipc-protocol.test.ts` 写用例：`hello` 的 `protocol` 不等于当前值时产出 `fatal`（C-001）；`requestId` 格式非法时拒绝（C-007 前置）——先看它失败
+- [x] T003 [P] 在 `tests/unit/ipc-protocol.test.ts` 写用例：编码为单行 JSON（含换行时不得出现在字符串内）；解码拒绝非 JSON、拒绝超 64 KiB；`turn` 非负整数校验；未知 `type` 返回 `E_BAD_REQUEST`——先看它失败
+- [x] T004 [P] 在 `tests/unit/ipc-protocol.test.ts` 写用例：`hello` 的 `protocol` 不等于当前值时产出 `fatal`（C-001）；`requestId` 格式非法时拒绝（C-007 前置）——先看它失败
 - [ ] T005 [P] 在 `src/monitor/types.ts` 定义 `Monitor` 接口的契约测试：`turnStart` / `declare` / `turnStopping` / `upstreamError` / `resumeConfirm` / `finish` / `dispose` 七个方法，返回值类型与 `contracts/ipc-protocol.md` 的 `data` 表逐字段一致——先看它失败
 
 ### 实现
 
-- [ ] T006 在 `src/ipc/protocol.ts` 实现 `encodeMessage` / `decodeMessage` / `validateRequest`：编解码、64 KiB 上限、字段校验、错误码常量（`E_BAD_REQUEST`/`E_UNKNOWN_SESSION`/`E_OVERSIZE`/`E_INTERNAL`）
-- [ ] T007 [P] 在 `src/monitor/types.ts` 定义 `Monitor` 接口、`MonitorRequest`/`MonitorResponse` 联合类型、`MonitorConfigSnapshot`（七个字段）与 `TraceRecord`（含可选 `degraded`）
-- [ ] T008 在 `src/config.ts` 新增 `daemonMode`（`'auto' | 'off'`，默认 `'auto'`，`.volatile()`），并在 `snapshot()` 中暴露；`'off'` 对应 FR-016 的强制进程内模式
+- [x] T006 在 `src/ipc/protocol.ts` 实现 `encodeMessage` / `decodeMessage` / `validateRequest`：编解码、64 KiB 上限、字段校验、错误码常量（`E_BAD_REQUEST`/`E_UNKNOWN_SESSION`/`E_OVERSIZE`/`E_INTERNAL`）
+- [x] T007 [P] 在 `src/monitor/types.ts` 定义 `Monitor` 接口、`MonitorRequest`/`MonitorResponse` 联合类型、`MonitorConfigSnapshot`（七个字段）与 `TraceRecord`（含可选 `degraded`）
+- [x] T008 在 `src/config.ts` 新增 `daemonMode`（`'auto' | 'off'`，默认 `'auto'`，`.volatile()`），并在 `snapshot()` 中暴露；`'off'` 对应 FR-016 的强制进程内模式
 
 ---
 
@@ -62,18 +62,18 @@ description: "Task list for 跨进程监测守护"
 
 ### 测试
 
-- [ ] T009 [P] [US1] 在 `tests/unit/daemon-state.test.ts` 写状态转移用例：`turn-start` 重置声明；窗口内 `declare` 使 `forgetCount + 1`；窗口外不计数（005 语义）；`finish: stop` 清零续行计数；`finish: error` 不清零——先看它失败
-- [ ] T010 [P] [US1] 在 `tests/unit/daemon-state.test.ts` 写隔离用例：不同 `sessionId` 互不影响；同一 `sessionId` 跨连接可见（FR-007）——先看它失败
-- [ ] T011 [P] [US1] 在 `tests/integration/daemon-multiprocess.test.ts` 写用例：夹具 spawn 守护进程 → 两个独立客户端连接 → 交替触发未声明收尾 → 第 3 次 `reminder === true`（SC-001）——先看它失败
-- [ ] T012 [P] [US1] 在 `tests/integration/daemon-multiprocess.test.ts` 写用例：200 次并发判定后读取 JSONL，全部可按行解析（SC-004）——先看它失败
+- [x] T009 [P] [US1] 在 `tests/unit/daemon-state.test.ts` 写状态转移用例：`turn-start` 重置声明；窗口内 `declare` 使 `forgetCount + 1`；窗口外不计数（005 语义）；`finish: stop` 清零续行计数；`finish: error` 不清零——先看它失败
+- [x] T010 [P] [US1] 在 `tests/unit/daemon-state.test.ts` 写隔离用例：不同 `sessionId` 互不影响；同一 `sessionId` 跨连接可见（FR-007）——先看它失败
+- [x] T011 [P] [US1] 在 `tests/integration/daemon-multiprocess.test.ts` 写用例：夹具 spawn 守护进程 → 两个独立客户端连接 → 交替触发未声明收尾 → 第 3 次 `reminder === true`（SC-001）——先看它失败
+- [x] T012 [P] [US1] 在 `tests/integration/daemon-multiprocess.test.ts` 写用例：200 次并发判定后读取 JSONL，全部可按行解析（SC-004）——先看它失败
 
 ### 实现
 
-- [ ] T013 [US1] 在 `src/daemon/state.ts` 实现 `MonitorState` 表与七个转移函数，键为 `sessionId`；`declare` 的窗口判定复用 `src/forget.ts` 的既有语义（迁移不改行为）
-- [ ] T014 [US1] 在 `src/daemon/server.ts` 实现请求分发、`(sessionId, turn, type)` 幂等缓存（上限 256，C-008）、单请求异常隔离返回 `E_INTERNAL`（FR-013）
-- [ ] T015 [US1] 在 `src/daemon/main.ts` 实现进程入口：解析 `--socket`/`--pid` 参数、`net.createServer`、逐行解码、接线 `server.handle`
-- [ ] T016 [US1] 在 `src/monitor/remote.ts` 实现 `RemoteMonitor`：连接、握手、请求/响应关联、未握手前拒绝发请求
-- [ ] T017 [US1] 把 `src/trace.ts` 的写入路径改为可注入 sink：`LocalMonitor` 直接写文件，`RemoteMonitor` 由守护进程写；`degraded` 字段只在本地写时置真（FR-011）
+- [x] T013 [US1] 在 `src/daemon/state.ts` 实现 `MonitorState` 表与七个转移函数，键为 `sessionId`；`declare` 的窗口判定复用 `src/forget.ts` 的既有语义（迁移不改行为）
+- [x] T014 [US1] 在 `src/daemon/server.ts` 实现请求分发、`(sessionId, turn, type)` 幂等缓存（上限 256，C-008）、单请求异常隔离返回 `E_INTERNAL`（FR-013）
+- [x] T015 [US1] 在 `src/daemon/main.ts` 实现进程入口：解析 `--socket`/`--pid` 参数、`net.createServer`、逐行解码、接线 `server.handle`
+- [x] T016 [US1] 在 `src/monitor/remote.ts` 实现 `RemoteMonitor`：连接、握手、请求/响应关联、未握手前拒绝发请求
+- [x] T017 [US1] 把 `src/trace.ts` 的写入路径改为可注入 sink：`LocalMonitor` 直接写文件，`RemoteMonitor` 由守护进程写；`degraded` 字段只在本地写时置真（FR-011）
 - [ ] T018 [US1] 在 `tests/contract/monitor-parity.test.ts` 写双向一致性用例并跑通：同一组操作序列分别驱动 `LocalMonitor` 与 `RemoteMonitor`，断言七个方法的返回值逐字段相同
 
 ---
@@ -86,18 +86,18 @@ description: "Task list for 跨进程监测守护"
 
 ### 测试
 
-- [ ] T019 [P] [US2] 在 `tests/unit/launcher.test.ts` 写用例：`ECONNREFUSED` 且 pid 已死 → 判定为陈旧 → 清理；`ECONNREFUSED` 但 pid 存活 → 不清理（R-004 的竞态防护）——先看它失败
-- [ ] T020 [P] [US2] 在 `tests/integration/daemon-lifecycle.test.ts` 写用例：无守护进程时首个请求触发拉起，5 秒内返回（SC-006 的前半）——先看它失败
-- [ ] T021 [P] [US2] 同上文件写用例：两个连接先后断开，最后一个断开后 30 秒守护进程退出，`run/` 下无残留（SC-002）——先看它失败
-- [ ] T022 [P] [US2] 同上文件写用例：`kill -9` 保留 socket → 下次请求能自愈并在 5 秒内成功（SC-006）——先看它失败
+- [x] T019 [P] [US2] 在 `tests/unit/launcher.test.ts` 写用例：`ECONNREFUSED` 且 pid 已死 → 判定为陈旧 → 清理；`ECONNREFUSED` 但 pid 存活 → 不清理（R-004 的竞态防护）——先看它失败
+- [x] T020 [P] [US2] 在 `tests/integration/daemon-lifecycle.test.ts` 写用例：无守护进程时首个请求触发拉起，5 秒内返回（SC-006 的前半）——先看它失败
+- [x] T021 [P] [US2] 同上文件写用例：两个连接先后断开，最后一个断开后 30 秒守护进程退出，`run/` 下无残留（SC-002）——先看它失败
+- [x] T022 [P] [US2] 同上文件写用例：`kill -9` 保留 socket → 下次请求能自愈并在 5 秒内成功（SC-006）——先看它失败
 
 ### 实现
 
-- [ ] T023 [US2] 在 `src/ipc/launcher.ts` 实现 `ensureDaemon(socketPath)`：`ensureDir`、陈旧检测（`error.code` 分流 + `process.kill(pid, 0)` 二次确认）、`spawn(process.execPath, [entry], { detached: true, stdio: 'ignore' }).unref()`、50 毫秒 × 100 次重试
-- [ ] T024 [US2] 在 `src/daemon/main.ts` 实现连接计数与宽限退出：归零启动 `setTimeout(30_000).unref()`，新连接取消；退出前 `unlink` socket 与 pid
-- [ ] T025 [US2] 在 `src/daemon/main.ts` 写入 pid 文件（启动时）与 `SIGTERM`/`SIGINT` 清理（退出时）
-- [ ] T026 [US2] 在 `src/ipc/client.ts` 实现 `connect()`：建立连接 → 发 `hello` → 等 `welcome`；`fatal` 时抛 `ProtocolMismatchError` 并置本进程不再尝试（C-013）
-- [ ] T027 [US2] 在 `package.json` 的 `files` 与构建产物中确认 `dist/daemon/main.js` 随包分发，并加一条 manifest 测试断言该文件存在
+- [x] T023 [US2] 在 `src/ipc/launcher.ts` 实现 `ensureDaemon(socketPath)`：`ensureDir`、陈旧检测（`error.code` 分流 + `process.kill(pid, 0)` 二次确认）、`spawn(process.execPath, [entry], { detached: true, stdio: 'ignore' }).unref()`、50 毫秒 × 100 次重试
+- [x] T024 [US2] 在 `src/daemon/main.ts` 实现连接计数与宽限退出：归零启动 `setTimeout(30_000).unref()`，新连接取消；退出前 `unlink` socket 与 pid
+- [x] T025 [US2] 在 `src/daemon/main.ts` 写入 pid 文件（启动时）与 `SIGTERM`/`SIGINT` 清理（退出时）
+- [x] T026 [US2] 在 `src/ipc/client.ts` 实现 `connect()`：建立连接 → 发 `hello` → 等 `welcome`；`fatal` 时抛 `ProtocolMismatchError` 并置本进程不再尝试（C-013）
+- [x] T027 [US2] 在 `package.json` 的 `files` 与构建产物中确认 `dist/daemon/main.js` 随包分发，并加一条 manifest 测试断言该文件存在
 
 ---
 
@@ -109,27 +109,27 @@ description: "Task list for 跨进程监测守护"
 
 ### 测试
 
-- [ ] T028 [P] [US3] 在 `tests/integration/daemon-degrade.test.ts` 写用例：socket 路径不可写 → 首个请求降级 → `turn-stopping` 仍返回 `inject: true`（SC-003）——先看它失败
-- [ ] T029 [P] [US3] 同上文件写用例：降级后连续 10 次判定，告警只出现 1 次（FR-018）——先看它失败
-- [ ] T030 [P] [US3] 同上文件写用例：降级期间留痕带 `degraded: true`，且不写守护进程路径之外的第二个文件（FR-011）——先看它失败
-- [ ] T031 [P] [US3] 同上文件写用例：模拟守护进程挂起（不响应），单次判定耗时 ≤ 200 毫秒（SC-005）——先看它失败
+- [x] T028 [P] [US3] 在 `tests/integration/daemon-degrade.test.ts` 写用例：socket 路径不可写 → 首个请求降级 → `turn-stopping` 仍返回 `inject: true`（SC-003）——先看它失败
+- [x] T029 [P] [US3] 同上文件写用例：降级后连续 10 次判定，告警只出现 1 次（FR-018）——先看它失败
+- [x] T030 [P] [US3] 同上文件写用例：降级期间留痕带 `degraded: true`，且不写守护进程路径之外的第二个文件（FR-011）——先看它失败
+- [x] T031 [P] [US3] 同上文件写用例：模拟守护进程挂起（不响应），单次判定耗时 ≤ 200 毫秒（SC-005）——先看它失败
 
 ### 实现
 
-- [ ] T032 [US3] 在 `src/monitor/remote.ts` 实现 200 毫秒超时与降级切换：超时/连接失败 → 切 `LocalMonitor` → 记一次告警 → 本进程后续请求不再尝试
-- [ ] T033 [US3] 在 `src/monitor/local.ts` 实现 `LocalMonitor`：包装既有 `state`/`forget`/`resume`/`turn`/`trace`，语义与今天逐字一致（parity 测试即为此处的回归网）
-- [ ] T034 [US3] 在 `src/index.ts` 接线：`apply` 时选择 monitor；`turn-stopping` 改为 `async` 并 `await` 判定（R-008），超时分支走同步本地兜底；其余事件照旧转发
-- [ ] T035 [US3] 在 `src/index.ts` 处理 `daemonMode === 'off'`：跳过远程，直接用 `LocalMonitor`（FR-016）
+- [x] T032 [US3] 在 `src/monitor/remote.ts` 实现 200 毫秒超时与降级切换：超时/连接失败 → 切 `LocalMonitor` → 记一次告警 → 本进程后续请求不再尝试
+- [x] T033 [US3] 在 `src/monitor/local.ts` 实现 `LocalMonitor`：包装既有 `state`/`forget`/`resume`/`turn`/`trace`，语义与今天逐字一致（parity 测试即为此处的回归网）
+- [x] T034 [US3] 在 `src/index.ts` 接线：`apply` 时选择 monitor；`turn-stopping` 改为 `async` 并 `await` 判定（R-008），超时分支走同步本地兜底；其余事件照旧转发
+- [x] T035 [US3] 在 `src/index.ts` 处理 `daemonMode === 'off'`：跳过远程，直接用 `LocalMonitor`（FR-016）
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T036 [P] 更新 `docs/PLUGIN-DESIGN.md`：新增「为什么引入守护进程」「为什么保留双实现」「协议版本为何必要」三节，附 `contracts/ipc-protocol.md` 链接
-- [ ] T037 [P] 更新 `README.md`：安装后行为变化、`daemonMode` 配置项、故障排查（如何看 `run/` 下的文件、如何强制进程内模式）
-- [ ] T038 [P] 更新 `AGENTS.md`：目录结构加三个新目录，构建与运行补守护进程的验证命令，测试计数更新
-- [ ] T039 [P] 更新 `CHANGELOG.md` 的 `[Unreleased]`，并在 `package.json` 升到 `0.3.0`
-- [ ] T040 全量验证：`npm run typecheck && npm run build && npm test` 全绿；`npm pack` 后确认 `dist/daemon/main.js` 在包内；按 `quickstart.md` 跑完七个场景
+- [x] T036 [P] 更新 `docs/PLUGIN-DESIGN.md`：新增「为什么引入守护进程」「为什么保留双实现」「协议版本为何必要」三节，附 `contracts/ipc-protocol.md` 链接
+- [x] T037 [P] 更新 `README.md`：安装后行为变化、`daemonMode` 配置项、故障排查（如何看 `run/` 下的文件、如何强制进程内模式）
+- [x] T038 [P] 更新 `AGENTS.md`：目录结构加三个新目录，构建与运行补守护进程的验证命令，测试计数更新
+- [x] T039 [P] 更新 `CHANGELOG.md` 的 `[Unreleased]`，并在 `package.json` 升到 `0.3.0`
+- [x] T040 全量验证：`npm run typecheck && npm run build && npm test` 全绿；`npm pack` 后确认 `dist/daemon/main.js` 在包内；按 `quickstart.md` 跑完七个场景
 
 ---
 
