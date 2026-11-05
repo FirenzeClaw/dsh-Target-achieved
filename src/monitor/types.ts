@@ -47,6 +47,8 @@ export interface Monitor {
   dispose(agent: Agent): void
   /** 当前配置快照（远程实现每次请求都带）。 */
   readonly config: () => MonitorConfigSnapshot
+  /** 预热；远程实现用它把拉起等待挪到启动阶段。 */
+  warmup?(): Promise<void>
 }
 
 /**

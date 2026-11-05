@@ -104,6 +104,9 @@ export function apply(ctx: Context, rawConfig: unknown): void {
         })
       : createLocalMonitor(() => snapshot(config))
 
+  // 预热不阻塞 apply：失败会在首次请求时降级，且只告警一次。
+  void monitor.warmup?.().catch(() => undefined)
+
   // 不在这里 `if (!config.enabled) return`：enabled 是 volatile，用户随时可在设置页关掉，
   // 关掉后必须立刻停止注入。若启动时就 return，开关会变成"改了没反应"。
   ctx.systemPrompt.section({

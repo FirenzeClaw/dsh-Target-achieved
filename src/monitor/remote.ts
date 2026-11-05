@@ -38,6 +38,8 @@ export function createRemoteMonitor(options: {
   config(): TargetMonitorConfig
   warn(message: string): void
   now?(): number
+  /** 拉起预算；测试用它把 5 秒缩短。 */
+  launchBudgetMs?: number
 }): RemoteMonitor {
   const local = createLocalMonitor(options.config, options.now ?? Date.now)
   const snapshot = (): MonitorConfigSnapshot => snapshotOf(options.config())
@@ -72,7 +74,11 @@ export function createRemoteMonitor(options: {
     if (connecting !== undefined) return connecting.catch(() => undefined)
 
     connecting = (async (): Promise<DaemonClient> => {
-      const probe = await ensureDaemon({ socketPath: options.socketPath, pidPath: options.pidPath })
+      const probe = await ensureDaemon({
+        socketPath: options.socketPath,
+        pidPath: options.pidPath,
+        ...(options.launchBudgetMs === undefined ? {} : { budgetMs: options.launchBudgetMs }),
+      })
       if (probe !== 'ok') throw new IpcError('daemon did not become ready', 'E_CONNECT')
       return connectClient({ socketPath: options.socketPath })
     })()
@@ -122,6 +128,16 @@ export function createRemoteMonitor(options: {
     close(): void {
       client?.close()
       client = undefined
+    },
+
+    /**
+     * 预热连接。
+     *
+     * 在 `apply` 里调用：把「拉起 + 建连」的等待挪到插件启动时，
+     * 而不是让它落在某次轮次收尾上——那会变成用户可见的卡顿。
+     */
+    async warmup(): Promise<void> {
+      await ensureClient()
     },
 
     turnStart(agent: Agent, turn: number): void {
