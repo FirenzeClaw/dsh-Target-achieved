@@ -35,17 +35,25 @@ type ExitHandler = () => void
  * @param argv - `process.argv.slice(2)`
  * @returns socket 与 pid 文件路径
  */
-export function parseArgs(argv: readonly string[]): { socketPath: string; pidPath: string } {
+export function parseArgs(argv: readonly string[]): { socketPath: string; pidPath: string; graceMs?: number } {
   let socketPath = ''
   let pidPath = ''
+  let graceMs: number | undefined
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     if (arg === '--socket') socketPath = argv[index + 1] ?? ''
     if (arg === '--pid') pidPath = argv[index + 1] ?? ''
+    // 仅供测试与手工验证：把 30 秒宽限缩短，才能真实观察"退出并清理"这条路径。
+    if (arg === '--grace') {
+      const parsed = Number(argv[index + 1])
+      if (Number.isFinite(parsed) && parsed >= 0) graceMs = parsed
+    }
   }
   if (socketPath === '') throw new Error('target-monitor daemon: --socket is required')
   if (pidPath === '') throw new Error('target-monitor daemon: --pid is required')
-  return { socketPath: resolve(socketPath), pidPath: resolve(pidPath) }
+  return graceMs === undefined
+    ? { socketPath: resolve(socketPath), pidPath: resolve(pidPath) }
+    : { socketPath: resolve(socketPath), pidPath: resolve(pidPath), graceMs }
 }
 
 /**
@@ -62,7 +70,14 @@ export function startDaemon(options: {
   onExit?: () => void
 }): { close(): void; server: ReturnType<typeof createServer> } {
   const instanceGraceMs = options.graceMs ?? DEFAULT_GRACE_MS
-  const exitHandler: ExitHandler = options.onExit ?? (() => { process.exit(0) })
+  // 默认退出路径必须自己清理：宽限退出不是收到信号，没有别的机会补这一步。
+  // 之前只 process.exit(0)，socket 与 pid 文件会留在 $DSH_HOME/run 下，
+  // 直到下一个客户端靠 cleanStale 收掉——测试因为注入了会 close() 的 onExit 而没发现。
+  const exitHandler: ExitHandler =
+    options.onExit ?? (() => {
+      cleanupFiles(options)
+      process.exit(0)
+    })
 
   // 连接数与计时器必须属于实例而不是模块：一个进程里可能有多个 server
   // （测试就是这种情况），共享计数会让"最后一个连接断开"永远不成立。
@@ -249,7 +264,8 @@ function cleanupFiles(options: { socketPath: string; pidPath: string }): void {
 }
 
 // 直接执行时启动；被 import 时只导出（便于测试）。
-if (process.argv[1]?.endsWith('main.js') === true) {
+// 接受 .ts 与 .js：测试直接跑源码，构建产物跑 dist 下的 .js。
+if (/main\.(?:js|ts)$/.test(process.argv[1] ?? '')) {
   const options = parseArgs(process.argv.slice(2))
   configureTrace({})
   startDaemon(options)
