@@ -37,7 +37,17 @@ test('宿主已解析的配置（volatile 字段是引用）不得再跑一遍 s
   const enabled = Object.freeze({ get: () => false })
   const reminderThreshold = Object.freeze({ get: () => 4 })
   const reactionWindowMs = Object.freeze({ get: () => 10_000 })
-  const config = resolveConfig({ enabled, stallNoticeThreshold: 3, reminderThreshold, reactionWindowMs })
+  // 真实宿主解析后一定包含全部字段（schema 会填默认值），这里如实模拟。
+  const resumeOnUpstreamError = Object.freeze({ get: () => true })
+  const maxResumes = Object.freeze({ get: () => 2 })
+  const config = resolveConfig({
+    enabled,
+    stallNoticeThreshold: 3,
+    reminderThreshold,
+    reactionWindowMs,
+    resumeOnUpstreamError,
+    maxResumes,
+  })
 
   assert.equal(config.enabled, enabled, '必须原样保留宿主给的引用')
   assert.equal(config.reminderThreshold, reminderThreshold)
@@ -83,10 +93,61 @@ test('空配置下复述阈值与反应窗口取默认值', () => {
 })
 
 test('snapshot 把 volatile 引用拍平为普通值', () => {
-  assert.deepEqual(snapshot(resolveConfig({ enabled: false, stallNoticeThreshold: 3 })), {
+  assert.deepEqual(snapshot(resolveConfig({ enabled: false, stallNoticeThreshold: 3, maxResumes: 2 })), {
     enabled: false,
     stallNoticeThreshold: 3,
     reminderThreshold: 3,
     reactionWindowMs: 30_000,
+    resumeOnUpstreamError: true,
+    maxResumes: 2,
   })
+})
+
+test('续行配置有默认值：开关打开、上限 3', () => {
+  const config = resolveConfig({})
+  assert.equal(config.resumeOnUpstreamError.get(), true)
+  assert.equal(config.maxResumes.get(), 3)
+  const flat = snapshot(config)
+  assert.equal(flat.resumeOnUpstreamError, true)
+  assert.equal(flat.maxResumes, 3)
+})
+
+test('maxResumes 允许 0（等于关闭自动续行），拒绝负数与小数', () => {
+  assert.equal(resolveConfig({ maxResumes: 0 }).maxResumes.get(), 0)
+  for (const bad of [-1, 1.5, '3', null, Number.NaN]) {
+    assert.throws(() => resolveConfig({ maxResumes: bad }), /maxResumes/, `应拒绝 ${String(bad)}`)
+  }
+})
+
+test('两个续行字段必须是 volatile 引用（设置页靠这个自动生成表单）', () => {
+  const config = resolveConfig({})
+  assert.equal(typeof config.resumeOnUpstreamError.get, 'function')
+  assert.equal(typeof config.maxResumes.get, 'function')
+})
+
+test('已解析配置里续行字段若不是引用则抛出，不得静默当普通值用', () => {
+  const enabled = Object.freeze({ get: () => true })
+  const reminderThreshold = Object.freeze({ get: () => 3 })
+  const reactionWindowMs = Object.freeze({ get: () => 30_000 })
+  assert.throws(
+    () => resolveConfig({ enabled, reminderThreshold, reactionWindowMs, resumeOnUpstreamError: true }),
+    /resumeOnUpstreamError/,
+  )
+})
+
+test('已解析配置里续行字段的非法取值同样抛出（设置页写入即报错）', () => {
+  const enabled = Object.freeze({ get: () => true })
+  const reminderThreshold = Object.freeze({ get: () => 3 })
+  const reactionWindowMs = Object.freeze({ get: () => 30_000 })
+  assert.throws(
+    () =>
+      resolveConfig({
+        enabled,
+        reminderThreshold,
+        reactionWindowMs,
+        resumeOnUpstreamError: Object.freeze({ get: () => true }),
+        maxResumes: Object.freeze({ get: () => -2 }),
+      }),
+    /maxResumes/,
+  )
 })

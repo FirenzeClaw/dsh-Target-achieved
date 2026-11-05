@@ -4,7 +4,8 @@
  * 配置错误在启动时抛出，绝不静默回退到默认值——否则用户以为改了行为、实际按默认值跑，
  * 属于最难排查的一类故障。
  *
- * volatile 字段（`enabled` / `reminderThreshold` / `reactionWindowMs`）会被宿主设置页
+ * volatile 字段（`enabled` / `reminderThreshold` / `reactionWindowMs` /
+ * `resumeOnUpstreamError` / `maxResumes`）会被宿主设置页
  * 渲染成可编辑控件，并在改动后不重挂载插件地更新引用。因此插件必须在**每次使用时
  * `.get()`**，不能捕获快照，否则页面上的改动就是假的。
  *
@@ -26,6 +27,9 @@ const DEFAULT_REMINDER_THRESHOLD = 3
 /** 注入后多久内的声明算作"被提醒才想起来"。实测响应中位数约 9.6 秒，留约 3 倍余量。 */
 const DEFAULT_REACTION_WINDOW_MS = 30_000
 
+/** 连续几次上游失败后不再自动续行。超过这个数，多半不是抖动而是真挂了。 */
+const DEFAULT_MAX_RESUMES = 3
+
 export const Config = z.object({
   /** 总开关；关闭时收尾门不注入、工具直接拒绝声明。 */
   enabled: z.boolean().default(true).volatile(),
@@ -35,6 +39,10 @@ export const Config = z.object({
   reminderThreshold: z.number().default(DEFAULT_REMINDER_THRESHOLD).volatile(),
   /** 注入后多久内的声明算作被提醒后才想起来的。必须是正安全整数。 */
   reactionWindowMs: z.number().default(DEFAULT_REACTION_WINDOW_MS).volatile(),
+  /** 上游可重试错误后是否自动续行；关闭后只留痕不投递。 */
+  resumeOnUpstreamError: z.boolean().default(true).volatile(),
+  /** 连续续行上限；0 等价于关闭自动续行。 */
+  maxResumes: z.number().default(DEFAULT_MAX_RESUMES).volatile(),
 })
 
 /** 宿主解析后的配置：volatile 字段是稳定引用，需 `.get()` 取当前值。 */
@@ -43,6 +51,8 @@ export interface ResolvedConfig {
   stallNoticeThreshold: number
   reminderThreshold: Volatile<number>
   reactionWindowMs: Volatile<number>
+  resumeOnUpstreamError: Volatile<boolean>
+  maxResumes: Volatile<number>
 }
 
 /** 门与工具读到的普通值。 */
@@ -51,6 +61,8 @@ export interface TargetMonitorConfig {
   stallNoticeThreshold: number
   reminderThreshold: number
   reactionWindowMs: number
+  resumeOnUpstreamError: boolean
+  maxResumes: number
 }
 
 /**
@@ -80,6 +92,61 @@ function assertPositiveInt(value: unknown, field: string, fallback: number): num
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
     throw new Error(`target-monitor: config.${field} 必须是正安全整数，收到 ${String(value)}`)
   }
+  return value
+}
+
+/**
+ * 校验非负安全整数（允许 0）。
+ *
+ * `maxResumes = 0` 是合法配置：语义是"关闭自动续行"，与"配置写错"必须区分开，
+ * 所以不能复用 {@link assertPositiveInt}。
+ * @param value - 原始取值
+ * @param field - 字段名，用于错误信息
+ * @param fallback - 缺省值
+ * @returns 合法的非负安全整数
+ * @throws 当取值不是非负安全整数时
+ */
+function assertNonNegativeInt(value: unknown, field: string, fallback: number): number {
+  if (value === undefined) return fallback
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`target-monitor: config.${field} 必须是非负安全整数，收到 ${String(value)}`)
+  }
+  return value
+}
+
+/**
+ * 校验已解析形态下的 volatile 布尔字段。
+ *
+ * 已解析配置里 volatile 字段一定是引用；若拿到普通布尔，说明宿主契约变了，
+ * 此时应当 fail loud 而不是把它当稳定值用——否则设置页的开关会失灵且没人察觉。
+ * @param value - 疑似 volatile 引用
+ * @param field - 字段名
+ * @returns 原引用
+ * @throws 当字段不是 volatile 引用或取值不是布尔时
+ */
+function assertVolatileBoolean(value: unknown, field: string): Volatile<boolean> {
+  if (!isVolatileRef<boolean>(value)) {
+    throw new Error(`target-monitor: config.${field} 在已解析配置中应为 volatile 引用，收到 ${String(value)}`)
+  }
+  if (typeof value.get() !== 'boolean') {
+    throw new Error(`target-monitor: config.${field} 必须是布尔值，收到 ${String(value.get())}`)
+  }
+  return value
+}
+
+/**
+ * 校验已解析形态下的 volatile 非负整数字段。
+ * @param value - 疑似 volatile 引用
+ * @param field - 字段名
+ * @param fallback - 缺省值
+ * @returns 原引用
+ * @throws 当字段不是 volatile 引用或取值非法时
+ */
+function assertVolatileNonNegativeInt(value: unknown, field: string, fallback: number): Volatile<number> {
+  if (!isVolatileRef<number>(value)) {
+    throw new Error(`target-monitor: config.${field} 在已解析配置中应为 volatile 引用，收到 ${String(value)}`)
+  }
+  assertNonNegativeInt(value.get(), field, fallback)
   return value
 }
 
@@ -131,6 +198,8 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
         'reactionWindowMs',
         DEFAULT_REACTION_WINDOW_MS,
       ),
+      resumeOnUpstreamError: assertVolatileBoolean(input['resumeOnUpstreamError'], 'resumeOnUpstreamError'),
+      maxResumes: assertVolatileNonNegativeInt(input['maxResumes'], 'maxResumes', DEFAULT_MAX_RESUMES),
     }
   }
 
@@ -138,6 +207,7 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
   assertPositiveInt(input['stallNoticeThreshold'], 'stallNoticeThreshold', DEFAULT_STALL_NOTICE_THRESHOLD)
   assertPositiveInt(input['reminderThreshold'], 'reminderThreshold', DEFAULT_REMINDER_THRESHOLD)
   assertPositiveInt(input['reactionWindowMs'], 'reactionWindowMs', DEFAULT_REACTION_WINDOW_MS)
+  assertNonNegativeInt(input['maxResumes'], 'maxResumes', DEFAULT_MAX_RESUMES)
   return Config(input) as ResolvedConfig
 }
 
@@ -151,5 +221,7 @@ export function snapshot(config: ResolvedConfig): TargetMonitorConfig {
     stallNoticeThreshold: config.stallNoticeThreshold,
     reminderThreshold: config.reminderThreshold.get(),
     reactionWindowMs: config.reactionWindowMs.get(),
+    resumeOnUpstreamError: config.resumeOnUpstreamError.get() !== false,
+    maxResumes: config.maxResumes.get(),
   }
 }

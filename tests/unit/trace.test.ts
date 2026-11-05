@@ -139,3 +139,33 @@ test('测试进程内默认不落盘（避免污染用户真实日志目录）',
   assert.equal(recentTraces().length, 1, '内存缓冲照常记录')
   assert.ok(process.env['NODE_TEST_CONTEXT'] !== undefined, '本断言依赖 node --test 的进程标记')
 })
+
+test('三个续行 reason 可写入，且 errorCode 随记录落盘', () => {
+  const dir = withTempDir()
+  recordTrace(asAgent(), { turn: 4, outcome: 'injected', reason: 'upstream-resumed', attempt: 1, errorCode: 'RATE_LIMIT' })
+
+  const entry = recentTraces()[0]
+  assert.equal(entry?.reason, 'upstream-resumed')
+  assert.equal(entry?.errorCode, 'RATE_LIMIT')
+
+  const line = readFileSync(join(dir, 'gate-trace.jsonl'), 'utf8').trim()
+  assert.equal(JSON.parse(line).errorCode, 'RATE_LIMIT')
+})
+
+test('errorCode 缺省时不出现该键——老记录形态保持不变', () => {
+  withTempDir()
+  recordTrace(asAgent(), { turn: 5, outcome: 'released', reason: 'declared', attempt: 0 })
+
+  const entry = recentTraces()[0]
+  assert.ok(entry !== undefined)
+  assert.equal('errorCode' in entry, false, '可选字段缺省时不应写入')
+  assert.deepEqual(Object.keys(entry).sort(), ['at', 'attempt', 'outcome', 'reason', 'session', 'turn'])
+})
+
+test('既有六种 reason 语义与计数不变', () => {
+  withTempDir()
+  recordTrace(asAgent(), { turn: 6, outcome: 'released', reason: 'aborted', attempt: 0 })
+  const entry = recentTraces()[0]
+  assert.equal(entry?.reason, 'aborted')
+  assert.equal(entry?.attempt, 0)
+})

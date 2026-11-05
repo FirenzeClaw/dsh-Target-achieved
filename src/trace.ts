@@ -25,8 +25,22 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 /** 判定结果。 */
 export type GateOutcome = 'injected' | 'released'
 
-/** 判定原因；与 outcome 一一约束（见 contracts/trace-record.md）。 */
-export type GateReason = 'undeclared' | 'declared' | 'disabled' | 'not-root' | 'aborted' | 'error'
+/**
+ * 判定原因；与 outcome 一一约束（见 contracts/trace-record.md）。
+ *
+ * `upstream-*` 三个值来自错误路径（spec 006）：它们与收尾门互斥——
+ * 错误路径不派发 `agent/turn-stopping`，所以同一条记录不会两者兼有。
+ */
+export type GateReason =
+  | 'undeclared'
+  | 'declared'
+  | 'disabled'
+  | 'not-root'
+  | 'aborted'
+  | 'error'
+  | 'upstream-resumed'
+  | 'upstream-skipped'
+  | 'upstream-capped'
 
 /** 一条判定记录。 */
 export interface GateTraceEntry {
@@ -40,6 +54,13 @@ export interface GateTraceEntry {
   readonly reason: GateReason
   /** 本轮第几次注入；`released` 时为 0。 */
   readonly attempt: number
+  /**
+   * 上游错误码；仅错误路径出现。
+   *
+   * 可选是刻意的：既有记录没有这个键，老消费者读到 `undefined` 即可，
+   * 不需要格式版本号（spec 006 / T-004）。
+   */
+  readonly errorCode?: string
 }
 
 /** 调用方要提供的部分：时间、会话、部分由本模块补齐。 */
@@ -178,6 +199,8 @@ export function recordTrace(agent: Agent, input: TraceInput): void {
     outcome: input.outcome,
     reason: input.reason,
     attempt: input.attempt,
+    // 条件展开：缺省时不写这个键，保持老记录的字段集合不变。
+    ...(input.errorCode === undefined ? {} : { errorCode: input.errorCode }),
   }
 
   buffer.push(entry)
