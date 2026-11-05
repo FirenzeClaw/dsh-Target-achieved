@@ -43,6 +43,8 @@ export const Config = z.object({
   resumeOnUpstreamError: z.boolean().default(true).volatile(),
   /** 连续续行上限；0 等价于关闭自动续行。 */
   maxResumes: z.number().default(DEFAULT_MAX_RESUMES).volatile(),
+  /** 是否注入声明规范；关闭后工具与收尾门一并停用（spec 008）。 */
+  declarationSection: z.boolean().default(true).volatile(),
 })
 
 /** 宿主解析后的配置：volatile 字段是稳定引用，需 `.get()` 取当前值。 */
@@ -53,6 +55,7 @@ export interface ResolvedConfig {
   reactionWindowMs: Volatile<number>
   resumeOnUpstreamError: Volatile<boolean>
   maxResumes: Volatile<number>
+  declarationSection: Volatile<boolean>
 }
 
 /** 门与工具读到的普通值。 */
@@ -63,6 +66,7 @@ export interface TargetMonitorConfig {
   reactionWindowMs: number
   resumeOnUpstreamError: boolean
   maxResumes: number
+  declarationSection: boolean
 }
 
 /**
@@ -135,6 +139,22 @@ function assertVolatileBoolean(value: unknown, field: string): Volatile<boolean>
 }
 
 /**
+ * 校验已解析形态下的 volatile 布尔字段，缺省时回落到默认值。
+ *
+ * 与 `assertVolatileBoolean` 的差别只在于「字段不存在」的处理：新增字段在
+ * 旧配置对象上必然缺省，此时按默认值放行比抛错更合理——抛错会让一次插件
+ * 升级直接把整条 entry 打成 inactive，而用户什么都没改。
+ * @param value - 疑似 volatile 引用
+ * @param field - 字段名，用于错误信息
+ * @param fallback - 字段缺省时的取值
+ * @returns volatile 引用（缺省时是一个只读常量引用）
+ */
+function assertVolatileBooleanOr(value: unknown, field: string, fallback: boolean): Volatile<boolean> {
+  if (value === undefined) return Object.freeze({ get: () => fallback })
+  return assertVolatileBoolean(value, field)
+}
+
+/**
  * 校验已解析形态下的 volatile 非负整数字段。
  * @param value - 疑似 volatile 引用
  * @param field - 字段名
@@ -200,6 +220,7 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
       ),
       resumeOnUpstreamError: assertVolatileBoolean(input['resumeOnUpstreamError'], 'resumeOnUpstreamError'),
       maxResumes: assertVolatileNonNegativeInt(input['maxResumes'], 'maxResumes', DEFAULT_MAX_RESUMES),
+      declarationSection: assertVolatileBooleanOr(input['declarationSection'], 'declarationSection', true),
     }
   }
 
@@ -223,5 +244,6 @@ export function snapshot(config: ResolvedConfig): TargetMonitorConfig {
     reactionWindowMs: config.reactionWindowMs.get(),
     resumeOnUpstreamError: config.resumeOnUpstreamError.get() !== false,
     maxResumes: config.maxResumes.get(),
+    declarationSection: config.declarationSection.get() !== false,
   }
 }
