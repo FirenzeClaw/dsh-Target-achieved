@@ -1,4 +1,4 @@
-# Specification Quality Checklist: 收尾判定留痕
+# Specification Quality Checklist: 可观测性与可分发性
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-11-05
@@ -31,7 +31,8 @@
 
 ## Notes
 
-- 背景一节点名了这次误判的真实经过，作为需求来源；它不是实现细节，而是"为什么需要可观测性"的证据。
-- 保留策略（FR-005）刻意不写具体数字，留到 plan 阶段结合记录体积决定。
-- 查询入口（工具 / 日志 / 调试命令）留给 plan，规格只约束"能按轮次检索"这一能力。
-- FR-007 与 US3 是安全边界：留痕不得反向影响判定，也不得进入模型可见面。
+- 本规格把三块能力（留痕 / 设置页 / 可分发）收进一个特性，因为它们共享同一前提：插件要像一个正规插件那样存在。若后续发现耦合过重，可在 plan 阶段拆成独立切片，但规格层面视为同一目标下的三组需求。
+- 背景里引用了具体调查经过（会话日志、误判），作为需求来源；这些是事实证据，不是实现细节。
+- 保留策略（FR-005）只写"必须有上限"，具体数字留到 plan 按记录体积定。
+- FR-010 与 FR-011 是安全边界：设置页不可用不得拖垮插件；写入不得绕过宿主优先级。
+- 调研结论（volatile 字段才进设置页、bundle 需 `dsh.manifestVersion` + `dsh.bundle.patch`、市场清单字段集）留在 plan 与 research 中，规格只写能力。
