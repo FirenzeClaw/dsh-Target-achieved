@@ -9,12 +9,17 @@
 /** 归一化后的提醒原因。 */
 export type RepairReason = 'undeclared' | 'truncated'
 
-/** 系统提示词章节：声明协议。静态注册一次，不逐轮注入。 */
+/**
+ * 系统提示词章节：声明协议。静态注册一次，不逐轮注入。
+ *
+ * 顺序必须写死为"先声明、再汇报/等待"：只说"收尾前要声明"时，模型倾向于
+ * 先把汇报写完再补声明，而那时轮次已经要关闭，补声明就来不及了（spec 005 / FR-006）。
+ */
 export const DECLARATION_SECTION = [
-  'Before you close a turn, declare the target state with target_status:',
-  '- target_status("done") — the task is complete and you are about to report it.',
-  '- target_status("awaiting_user") — you need a user decision or more information.',
-  'If you close without declaring, the harness assumes the task is unfinished and asks you to continue.',
+  'Before you close a turn, declare the target state with target_status. Declare first, then report:',
+  '1. Task complete → call target_status("done") first, then report the result to the user.',
+  '2. Need a user decision → call target_status("awaiting_user") first, then ask the question.',
+  'Declaring is what tells the harness the turn ended on purpose. Closing without it makes the harness assume the task is unfinished and ask you to continue.',
 ].join('\n')
 
 /**

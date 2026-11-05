@@ -12,6 +12,13 @@ test('声明协议章节含两个状态与后果说明', () => {
   assert.match(DECLARATION_SECTION, /unfinished/)
 })
 
+test('声明协议必须写明"先声明，再汇报/等待"的顺序（spec 005 / FR-006）', () => {
+  // 只说"收尾前要声明"不够：模型会先写完汇报再补声明，而那时轮次已要关闭。
+  assert.match(DECLARATION_SECTION, /Declare first, then report/i)
+  assert.match(DECLARATION_SECTION, /call target_status\("done"\) first, then report/i)
+  assert.match(DECLARATION_SECTION, /call target_status\("awaiting_user"\) first, then ask/i)
+})
+
 test('提醒文案含三个出口', () => {
   const text = repairText('undeclared', 1)
   assert.match(text, /target_status\("done"\)/)
