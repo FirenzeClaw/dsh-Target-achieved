@@ -21,7 +21,6 @@ const OUTPUT = {
     type: 'object',
     properties: {
       ok: { type: 'boolean' },
-      turn: { type: 'number' },
       state: { type: 'string' },
     },
     additionalProperties: false,
@@ -83,7 +82,9 @@ export function registerTargetStatus(
         throw new Error('TARGET_STATUS_NO_TURN: no turn has been observed yet; retry after the next step starts.')
       }
       declare(agent, turn, args.state)
-      return Promise.resolve({ ok: true, turn, state: args.state })
+      // 轮次只用于内部对齐，不回给模型：模型既不需要也不该依赖它，
+      // 暴露出去反而会诱导它推理轮次编号（spec 002 修订）。
+      return Promise.resolve({ ok: true, state: args.state })
     },
   }))
 }

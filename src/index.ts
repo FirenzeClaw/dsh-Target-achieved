@@ -26,8 +26,14 @@ export const name = 'target-monitor'
 /** 依赖的宿主服务；缺失时 cordis 拒绝启动，等价于 fail loud（FR-015）。 */
 export const inject = ['agents', 'tools', 'systemPrompt'] as const
 
-/** 章节排序：排在工具说明之后、不与 goal 策略段争位。 */
-const SECTION_ORDER = 900
+/**
+ * 章节排序：紧跟 goal 策略段（2400）、在 workflow 段（2600）之前。
+ *
+ * 不能沿用 900——那是宿主的 `FILE_REFERENCE` 序号，撞号后本节会被排进
+ * AGENTS.md 正文中间（实测落在第 25 行，前后都是项目说明），一条必须被看见的
+ * 协议就此被埋掉。2500 目前无占用。
+ */
+const SECTION_ORDER = 2500
 
 /** 每个 agent 最近一次 assistant 流所属的轮次（由 start 帧给出）。 */
 const streamTurn = new WeakMap<Agent, number>()

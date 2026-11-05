@@ -49,17 +49,25 @@ interface Harness {
   startFrame(agent: Agent, turn: number): void
   /** 触发一次收尾判定。 */
   turnStopping(agent: Agent, turn: number): void
+  /** 已注册的系统提示词章节。 */
+  sections: { name: string; order: number }[]
   /** 调用 target_status 的 execute。 */
-  declare(agent: Agent, state: 'done' | 'awaiting_user'): Promise<{ turn: number; state: string }>
+  declare(agent: Agent, state: 'done' | 'awaiting_user'): Promise<{ state: string }>
 }
 
 /** 把插件挂在假 ctx 上，收集事件监听器与注册的工具。 */
 function harness(roots: Agent[]): Harness {
   const listeners = new Map<string, (payload: unknown) => void>()
   let tool: { execute: (args: unknown, exec: { agent?: Agent }) => Promise<unknown> } | undefined
+  const sections: { name: string; order: number }[] = []
 
   const ctx = {
-    systemPrompt: { section: () => undefined },
+    systemPrompt: {
+      section(section: { name: string; order: number }) {
+        sections.push({ name: section.name, order: section.order })
+        return () => undefined
+      },
+    },
     tools: {
       register(definition: unknown) {
         tool = definition as Harness extends never ? never : typeof tool
@@ -88,20 +96,25 @@ function harness(roots: Agent[]): Harness {
     },
     async declare(agent, state) {
       assert.ok(tool, 'target_status 必须已注册')
-      return (await tool.execute({ state }, { agent })) as { turn: number; state: string }
+      return (await tool.execute({ state }, { agent })) as { state: string }
     },
+    sections,
   }
 }
 
-test('US2：start 帧之后调用声明，报告的轮次就是本轮', async () => {
-  const { agent } = fakeAgent()
-  const h = harness([agent])
+test('US2：声明不再向模型暴露轮次，但内部仍落在本轮', async () => {
+  const f = fakeAgent()
+  const h = harness([f.agent])
 
-  h.startFrame(agent, 7)
+  h.startFrame(f.agent, 7)
 
-  const result = await h.declare(agent, 'done')
-  assert.equal(result.turn, 7, '不得返回上一轮的轮次或哨兵值 0')
+  const result = await h.declare(f.agent, 'done')
   assert.equal(result.state, 'done')
+  // 轮次只用于内部对齐：模型既不需要也不该依赖它。
+  assert.equal('turn' in result, false, '返回值不得包含 turn 字段')
+  // 内部确实落到了第 7 轮——由收尾判定读到声明来间接证明。
+  h.turnStopping(f.agent, 7)
+  assert.equal(f.nextStep.length, 0, '声明必须落在本轮，收尾时才读得到')
 })
 
 test('US1：轮次内声明 done 后收尾 → 不注入', async () => {
@@ -159,4 +172,15 @@ test('US2：尚未观察到任何轮次时调用声明 → 显式报错而不是
     /TARGET_STATUS_NO_TURN/,
     '无轮次可归属时必须拒绝，而不是把声明写到 0 号轮次',
   )
+})
+
+test('规范章节不得与宿主 FILE_REFERENCE 撞号（900）', () => {
+  const { agent } = fakeAgent()
+  const h = harness([agent])
+
+  const section = h.sections.find((item) => item.name === 'tool:target-monitor')
+  assert.ok(section, '声明协议章节必须已注册')
+  // 900 是宿主 FILE_REFERENCE 的序号；撞号会让本节被排进 AGENTS.md 正文中间。
+  assert.notEqual(section.order, 900, '不得占用宿主的 FILE_REFERENCE 序号')
+  assert.ok(section.order >= 2000 && section.order < 2600, '应落在 goal 段之后、workflow 段之前')
 })
