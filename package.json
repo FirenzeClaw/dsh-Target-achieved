@@ -31,7 +31,8 @@
   "files": [
     "dist",
     "dsh.bundle.patch",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

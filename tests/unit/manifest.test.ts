@@ -69,3 +69,11 @@ test('入口指向 dist，且 dist 被 files 收录', () => {
   assert.match(String(exportsField['.'].types), /^\.\/dist\//)
   assert.ok((manifest['files'] as string[]).includes('dist'))
 })
+
+test('许可文件存在且被 files 收录（声明 MIT 就必须真的给出许可文本）', () => {
+  assert.ok(existsSync(join(root, 'LICENSE')), 'package.json 声明 MIT，仓库内必须有 LICENSE')
+  assert.ok((manifest['files'] as string[]).includes('LICENSE'))
+  const text = readFileSync(join(root, 'LICENSE'), 'utf8')
+  assert.match(text, /^MIT License/)
+  assert.match(text, /THE SOFTWARE IS PROVIDED "AS IS"/, '必须是完整的 MIT 免责条款')
+})

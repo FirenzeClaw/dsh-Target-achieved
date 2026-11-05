@@ -18,6 +18,8 @@ DSH-Target-achieved/
 ├── AGENTS.md                  # 本文件：项目级上下文
 ├── README.md                  # 项目简介与入口
 ├── package.json               # ESM 包；peer 依赖由宿主提供
+├── LICENSE                    # MIT 许可全文（package.json 声明 MIT，必须真有此文件）
+├── dsh.bundle.patch           # bundle 补丁：只做 insert，不改宿主既有条目
 ├── tsconfig.json              # NodeNext + 导入后缀重写
 ├── src/                       # 插件实现
 │   ├── index.ts               # 入口：注册章节 / 工具 / 事件
@@ -32,7 +34,7 @@ DSH-Target-achieved/
 │   ├── notices.ts             # 消息来源归属与构造
 │   └── turn.ts                # 轮次来源（声明与判定共用）
 ├── tests/
-│   ├── unit/                  # state / config / cause / prompt / gate
+│   ├── unit/                  # state / config / cause / prompt / gate / forget / trace / manifest
 │   └── integration/           # 假 agent 上的完整收尾流程
 ├── scripts/link-host.sh       # 开发期链接宿主 @deepseek-ai 包
 ├── docs/
@@ -59,7 +61,7 @@ DSH-Target-achieved/
 - 测试：`npm test` → `node --test`（Node 24 原生类型剥离，零测试框架依赖）
 - 挂载：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
 
-**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 95 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 97 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
 
 **发布**：npm 与 git 双通道，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`。`package.json` 含 `dsh.manifestVersion: 1` + `dsh.bundle.patch`，支持 bundle / git / 本地 link 三种安装方式。
 
@@ -155,6 +157,18 @@ DSH-Target-achieved/
 - 原子提交：一次提交只做一件逻辑完整的事；格式化与逻辑、重构与功能分开提交
 - 分支：`feature/` `fix/` `chore/` `refactor/` 前缀，短命分支（1-3 天），main 始终可部署
 - 提交前：`git status` + 完整 `git diff` 自查 → 查密钥（password/secret/api_key/token）→ 跑测试与类型检查
+
+## 对外承诺（写进 README，改动需同步）
+
+本项目是**减损装置，不是正确性保证**。三条对外表述不得被夸大为更强的承诺：
+
+1. 只判定"收尾时有没有显式声明目标状态"，不判定任务是否真的完成；模型错误声明 `done` 时照常放行。
+2. 注入可能被忽略，同一轮不设硬上限；保证的是"不静默放行"，不是"一定会继续"。
+3. 依赖宿主内部事件契约（按 `0.2.1-rc.5` 核实），宿主升级后需复核。
+
+**开销**（README「开销」节有实测数字）：系统提示词章节 433 字符/轮；提醒 647 字符/次；复述 306 字符，每累计 3 次遗忘出现一次。真实成本是"可能多一轮"，实测注入响应中位数约 9.6 秒。
+
+许可为 MIT（`LICENSE` 全文）；`package.json` 的 `license` 字段、`files` 收录与 README 许可节三处必须一致。
 
 ## 安全红线
 
