@@ -17,6 +17,8 @@
 
 单项目结构：`src/`、`tests/` 在仓库根目录（见 plan.md §Project Structure）。
 
+> **修订记录（2026-11-05）**：`/speckit-analyze` 发现 FR-009 / FR-013 / FR-014 三条 MUST NOT 零覆盖，且 `tests/unit/prompt.test.ts` 被三个任务"扩充"却无人创建。本版补入 T014（创建该文件）、T019（FR-014）、T032（FR-009）、T036（FR-013），任务编号顺延重排为 T001–T045。
+
 ---
 
 ## Phase 1: Setup（共享基础设施）
@@ -41,7 +43,7 @@
 - [ ] T007 [P] 实现轮次状态于 `src/state.ts`：按顶层 agent 保存唯一 `TurnLatch { turn, state, repairs, noticeShown }`；轮次号变化即整体替换；提供 `get(agent, turn)`、`declare(agent, turn, state)`、`bumpRepair(...)`、`markNoticeShown(...)`、`forget(agent)`；默认 `state = 'working'`、`repairs = 0`、`noticeShown = false`
 - [ ] T008 [P] 编写文案于 `src/prompt.ts`：系统提示词章节文本（含 `done` / `awaiting_user` 语义与"未声明即视为未完成"的后果说明），以及 `repairText(reason, attempt)` 骨架，必须含非授权声明与三个出口（见 `contracts/notice.message.md`）
 - [ ] T009 声明消息来源于 `src/notices.ts`：通过 `MessageSourceMap` 模块扩展加入 `kind: 'target-monitor'`，并用 `createUserMessage` 构造 `{ kind, form: 'notice', summary }`；**禁止**使用 `'user'`
-- [ ] T010 实现插件入口于 `src/index.ts`：`inject = ['agents', 'tools', 'systemPrompt']`；注册系统提示词章节（`order` 取 `ctx.systemPrompt.getSectionOrder(...)` 既有槽位之后）；启动时校验所需服务与事件，缺失则抛出明确错误（FR-015）
+- [ ] T010 实现插件入口于 `src/index.ts`（**替换 T004 的占位实现**）：`inject = ['agents', 'tools', 'systemPrompt']`；注册系统提示词章节（`order` 取 `ctx.systemPrompt.getSectionOrder(...)` 既有槽位之后）；启动时校验所需服务与事件，缺失则抛出明确错误（FR-015）
 - [ ] T011 [P] 写测试 `tests/unit/config.test.ts`：合法配置通过；`stallNoticeThreshold = 0` / 负数 / 非整数 / `enabled` 非布尔 → 抛出且错误信息含字段名
 
 **Checkpoint**: 状态、配置、文案、来源、入口齐备；故事实现只需接线。
@@ -58,14 +60,16 @@
 
 - [ ] T012 [P] [US1] 写 `tests/unit/state.test.ts`：新轮次默认 `working`；`declare` 后状态改变；轮次号 +1 后自动回到 `working` 且 `repairs` 归零
 - [ ] T013 [P] [US1] 写 `tests/unit/gate.test.ts`：未声明 + `finish.kind = 'stop'` → 产生一次 steer，`repairs` 由 0 变 1；已声明 `done` → 不 steer
-- [ ] T014 [P] [US1] 写 `tests/integration/turn-gate.test.ts`：假 agent 上跑完整收尾流程，断言 steer 被调用一次、消息来源为 `target-monitor`/`notice`
+- [ ] T014 [P] [US1] **创建** `tests/unit/prompt.test.ts`：断言 `repairText` 含非授权声明（"not user approval"）、三个出口、以及 `awaiting_user` 的存在；断言长度 < 1.5 KB（`contracts/notice.message.md` 第 5 条）
+- [ ] T015 [P] [US1] 写 `tests/integration/turn-gate.test.ts`：假 agent 上跑完整收尾流程，断言 steer 被调用一次、消息来源为 `target-monitor`/`notice`
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] 实现 `src/tool.ts`：`defineTool` 注册 `target_status`，参数 `state`（`'done' | 'awaiting_user'`，必填）与 `summary`（可选），输出 `{ ok, turn, state }`；非顶层 agent 返回 `TARGET_STATUS_NOT_ROOT`，非法枚举返回 `TARGET_STATUS_INVALID_STATE`（见 `contracts/target-status.tool.md`）
-- [ ] T016 [US1] 实现 `src/gate.ts`：`agent/turn-stopping` 处理器——非顶层 agent 直接返回；已声明直接返回；否则 `repairs += 1` 并 `agent.steer(createRepairNotice(...))`；监听器内异常就地捕获记录，不得外抛
-- [ ] T017 [US1] 在 `src/index.ts` 接线：注册 `target_status` 工具、订阅 `agent/turn-stopping` 与 `agent/disposed`，并在 dispose 时清理该 agent 闩锁
-- [ ] T018 [US1] 端到端自测：按 `quickstart.md` S1 走查一次，记录实际观察结果到 `specs/001-target-monitor/quickstart.md` 的"人工确认"表
+- [ ] T016 [US1] 实现 `src/tool.ts`：`defineTool` 注册 `target_status`，参数 `state`（`'done' | 'awaiting_user'`，必填）与 `summary`（可选），输出 `{ ok, turn, state }`；非顶层 agent 返回 `TARGET_STATUS_NOT_ROOT`，非法枚举返回 `TARGET_STATUS_INVALID_STATE`（见 `contracts/target-status.tool.md`）
+- [ ] T017 [US1] 实现 `src/gate.ts`：`agent/turn-stopping` 处理器——非顶层 agent 直接返回；已声明直接返回；否则 `repairs += 1` 并 `agent.steer(createRepairNotice(...))`；监听器内异常就地捕获记录，不得外抛
+- [ ] T018 [US1] 在 `src/index.ts` 接线：注册 `target_status` 工具、订阅 `agent/turn-stopping` 与 `agent/disposed`，并在 dispose 时清理该 agent 闩锁
+- [ ] T019 [US1] 补 `tests/unit/gate.test.ts` 用例锁定 FR-014：助手正文含 `DONE` / `完成` / "task complete" 等字样但未调用 `target_status` → **仍然** steer；判定只读闩锁，不读消息文本
+- [ ] T020 [US1] 端到端自测：按 `quickstart.md` S1 走查一次，记录实际观察结果到 `quickstart.md` 的"已知需要人工确认的点"表
 
 **Checkpoint**: US1 可独立交付，此时已是可用 MVP。
 
@@ -79,13 +83,13 @@
 
 ### Tests for User Story 2
 
-- [ ] T019 [P] [US2] 扩充 `tests/unit/gate.test.ts`：`awaiting_user` → 不 steer；同一轮内先声明 `done` 再声明 `awaiting_user` → 以最后一次为准
-- [ ] T020 [P] [US2] 扩充 `tests/unit/prompt.test.ts`：系统提示词章节与提醒文案都出现 `awaiting_user`，且提醒文案含"不解除确认要求"的句子
+- [ ] T021 [P] [US2] 扩充 `tests/unit/gate.test.ts`：`awaiting_user` → 不 steer；同一轮内先声明 `done` 再声明 `awaiting_user` → 以最后一次为准
+- [ ] T022 [P] [US2] 扩充 `tests/unit/prompt.test.ts`：系统提示词章节与提醒文案都出现 `awaiting_user`，且提醒文案含"不解除确认要求"的句子
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] 在 `src/gate.ts` 落实放行集合 `{ done, awaiting_user }`，并在 `src/state.ts` 落实"后声明覆盖前声明"语义
-- [ ] T022 [US2] 在 `src/prompt.ts` 补齐"等待用户"出口的措辞：明确说明若在等确认，应先声明再收尾，而不是继续执行
+- [ ] T023 [US2] 在 `src/gate.ts` 落实放行集合 `{ done, awaiting_user }`，并在 `src/state.ts` 落实"后声明覆盖前声明"语义
+- [ ] T024 [US2] 在 `src/prompt.ts` 补齐"等待用户"出口的措辞：明确说明若在等确认，应先声明再收尾，而不是继续执行
 
 **Checkpoint**: US1 + US2 同时成立——既不放弃任务，也不越过用户确认。
 
@@ -99,14 +103,14 @@
 
 ### Tests for User Story 3
 
-- [ ] T023 [P] [US3] 写 `tests/unit/cause.test.ts`：`max-tokens → truncated`；`stop → undeclared`；`aborted`/`error` → 不产生提醒
-- [ ] T024 [P] [US3] 扩充 `tests/unit/prompt.test.ts`：`truncated` 文案含"tool calls after the cut were not executed"，`undeclared` 文案不含该句
+- [ ] T025 [P] [US3] 写 `tests/unit/cause.test.ts`：`max-tokens → truncated`；`stop → undeclared`；`aborted`/`error` → 不产生提醒
+- [ ] T026 [P] [US3] 扩充 `tests/unit/prompt.test.ts`：`truncated` 文案含"tool calls after the cut were not executed"，`undeclared` 文案不含该句
 
 ### Implementation for User Story 3
 
-- [ ] T025 [US3] 实现 `src/cause.ts`：订阅 `agent/assistant-stream`，只在 `frame.chunk.type === 'finish'` 时记录该 agent 当前轮的最后 `reason.kind`；轮次变化时重置（可并入 `state.ts`）
-- [ ] T026 [US3] 在 `src/prompt.ts` 增加 `truncated` 增量段落，并在 `src/gate.ts` 按 `StopCause` 选择文案
-- [ ] T027 [US3] 补齐降级：若 `agent/assistant-stream` 不可用，全部按 `undeclared` 处理并记录一次警告（见 `contracts/plugin.entry.md`）
+- [ ] T027 [US3] 实现 `src/cause.ts`：订阅 `agent/assistant-stream`，只在 `frame.chunk.type === 'finish'` 时记录该 agent 当前轮的最后 `reason.kind`；轮次变化时重置（与 `state.ts` 共用轮次键）
+- [ ] T028 [US3] 在 `src/prompt.ts` 增加 `truncated` 增量段落，并在 `src/gate.ts` 按 `StopCause` 选择文案
+- [ ] T029 [US3] 补齐降级：若 `agent/assistant-stream` 不可用，全部按 `undeclared` 处理并记录一次警告（见 `contracts/plugin.entry.md`）
 
 **Checkpoint**: 截断场景不再被当成普通收尾，模型不会误以为工具已执行。
 
@@ -114,37 +118,39 @@
 
 ## Phase 6: User Story 4 - 卡住时告知用户（P2）
 
-**Goal**: 第 5 次未声明时向用户展示"可能卡住"，且只展示一次。
+**Goal**: 达到阈值时向用户展示"可能卡住"，且只展示一次；同时锁定"不设上限"。
 
-**Independent Test**: 同一轮连续 5 次未声明 → 出现一次用户提示；第 6 次不再出现。
+**Independent Test**: 同一轮连续达到阈值 → 出现一次用户提示；超过阈值后继续修复但不再提示。
 
 ### Tests for User Story 4
 
-- [ ] T028 [P] [US4] 扩充 `tests/unit/gate.test.ts`：`repairs` 达到阈值时消息附带用户提示且 `noticeShown` 置位；第 6 次不含该提示
-- [ ] T029 [P] [US4] 写 `tests/unit/config.test.ts` 用例：`stallNoticeThreshold` 自定义为 2 时第 2 次即提示
+- [ ] T030 [P] [US4] 扩充 `tests/unit/gate.test.ts`：`repairs` 达到阈值时消息附带用户提示且 `noticeShown` 置位；下一次不含该提示
+- [ ] T031 [P] [US4] 扩充 `tests/unit/config.test.ts`：`stallNoticeThreshold` 自定义为 2 时第 2 次即提示
+- [ ] T032 [P] [US4] 扩充 `tests/unit/gate.test.ts` 锁定 FR-009：同一轮连续 10 次未声明 → 每次都 steer；断言不存在任何"放弃/跳过/上限"分支（第 11 次仍产生提醒）
 
 ### Implementation for User Story 4
 
-- [ ] T030 [US4] 在 `src/notices.ts` 增加面向用户的提示段，并在 `src/gate.ts` 用 `noticeShown` 保证每轮最多一次
-- [ ] T031 [US4] 按 `quickstart.md` S4 在真实界面确认提示可见（`form: 'notice'` 的渲染），把结果记入"人工确认"表
+- [ ] T033 [US4] 在 `src/notices.ts` 增加面向用户的提示段，并在 `src/gate.ts` 用 `noticeShown` 保证每轮最多一次
+- [ ] T034 [US4] 按 `quickstart.md` S4 在真实界面确认提示可见（`form: 'notice'` 的渲染），把结果记入"已知需要人工确认的点"表
 
-**Checkpoint**: 无上限策略有了人工介入点。
+**Checkpoint**: 无上限策略有了人工介入点，且该策略被测试锁死。
 
 ---
 
 ## Phase 7: User Story 5 - 用户取消优先于插件判断（P3）
 
-**Goal**: 取消后本轮不再提醒；下一轮自动恢复门控。
+**Goal**: 取消后本轮不再提醒；下一轮自动恢复门控；插件绝不自行重试或重启。
 
 **Independent Test**: 取消路径零提醒；下一次用户输入后门控照常。
 
 ### Tests for User Story 5
 
-- [ ] T032 [P] [US5] 扩充 `tests/unit/gate.test.ts`：`finish.kind = 'aborted'` → 不 steer；随后同一 agent 进入新轮次 → 未声明时照常提醒
+- [ ] T035 [P] [US5] 扩充 `tests/unit/gate.test.ts`：`finish.kind = 'aborted'` → 不 steer；随后同一 agent 进入新轮次 → 未声明时照常提醒
+- [ ] T036 [P] [US5] 扩充 `tests/integration/turn-gate.test.ts` 锁定 FR-013：插件**不订阅** `agent/request-error`；`agent/error` 触发后不调用 `steer`/`followup`，不重启轮次
 
 ### Implementation for User Story 5
 
-- [ ] T033 [US5] 在 `src/gate.ts` 增加显式 `aborted` 防御分支（即使宿主不会在该路径派发收尾事件），并在 `src/state.ts` 保证新轮次重置
+- [ ] T037 [US5] 在 `src/gate.ts` 增加显式 `aborted` 防御分支（即使宿主不会在该路径派发收尾事件），并在 `src/state.ts` 保证新轮次重置
 
 **Checkpoint**: 五个故事全部可独立验证。
 
@@ -152,14 +158,14 @@
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T034 [P] 在 `src/gate.ts` 落实"仅顶层 agent 设门"（`ctx.agents.roots()`）并补 `tests/unit/gate.test.ts` 用例：子 agent 收尾零提醒（SC-005）
-- [ ] T035 [P] 补 `tests/unit/prompt.test.ts` 反例断言：文案不含任何外部文本占位、长度 < 1.5 KB、必须含三个出口（FR-007/FR-016）
-- [ ] T036 补宿主契约自检与失败测试：缺 `tools` / `systemPrompt` 服务时抛错并停用（FR-015、SC-006）
-- [ ] T037 [UNCERTAIN] 实测 `concludesTurn` 轮次语义（用 `present` 触发），决定是否豁免；结论写入 `research.md` 的未决项表
-- [ ] T038 [UNCERTAIN] 实测轮次内 goal 转 `complete`/`blocked` 的事件时序；若不可靠，按"多催一次"处理并记录
-- [ ] T039 跑 `quickstart.md` 全部 6 个场景（S1–S6），把每条的实际结果填进该文件的验证表
-- [ ] T040 按五轴审查（正确性/可读性/架构/安全/性能），安全轴必须覆盖：来源不得为 `user`、文案不得拼接外部文本、取消不复活、注入不破坏前缀缓存
-- [ ] T041 更新 `AGENTS.md` §宿主事实速查：补入实施中发现的宿主契约细节（`concludesTurn`、notice 渲染），保持"再核对、别凭记忆"可用
+- [ ] T038 [P] 在 `src/gate.ts` 落实"仅顶层 agent 设门"（`ctx.agents.roots()`）并补 `tests/unit/gate.test.ts` 用例：子 agent 收尾零提醒（SC-005）
+- [ ] T039 [P] 补 `tests/unit/prompt.test.ts` 反例断言：文案不含任何外部文本占位、长度符合契约（< 1.5 KB）、必须含三个出口（FR-007/FR-016）
+- [ ] T040 补宿主契约自检与失败测试：缺 `tools` / `systemPrompt` 服务时抛错并停用（FR-015、SC-006）
+- [ ] T041 [UNCERTAIN] 实测 `concludesTurn` 轮次语义（用 `present` 触发），决定是否豁免；结论写入 `research.md` 的未决项表
+- [ ] T042 [UNCERTAIN] 实测轮次内 goal 转 `complete`/`blocked` 的事件时序；若不可靠，按"最多多催一次"处理并记录（与 spec.md 边界条目一致）
+- [ ] T043 跑 `quickstart.md` 全部 6 个构造场景（S1–S6）**外加 3 个不同类型的真实任务**（SC-007），把结果填进该文件的验证表
+- [ ] T044 按五轴审查（正确性/可读性/架构/安全/性能），安全轴必须覆盖：来源不得为 `user`、文案不得拼接外部文本、取消不复活、注入不破坏前缀缓存
+- [ ] T045 [P] 更新 `AGENTS.md` §宿主事实速查（补 `concludesTurn`、notice 渲染的实测结论）与 `README.md`（当前仍写着"尚无实现代码"）
 
 ---
 
@@ -175,33 +181,44 @@
 ### User Story Dependencies
 
 - **US1（P1）**：Foundational 后即可，无故事依赖 —— 这是 MVP
-- **US2（P1）**：复用 US1 的 `gate.ts`，但可独立测试（断言"不 steer"）
+- **US2（P1）**：复用 US1 的 `gate.ts`，可独立测试（断言"不 steer"）
 - **US3（P2）**：复用 US1，新增 `cause.ts` 与文案分支
-- **US4（P2）**：复用 US1 的 `notices.ts`
-- **US5（P3）**：复用 US1 的 `gate.ts`，只需防御分支与测试
+- **US4（P2）**：复用 US1 的 `notices.ts`，新增阈值与"无上限"锁定
+- **US5（P3）**：复用 US1 的 `gate.ts`，新增防御分支与"不重试"锁定
+
+### 同文件冲突（必须串行）
+
+| 文件 | 涉及任务 | 建议顺序 |
+|---|---|---|
+| `tests/unit/gate.test.ts` | T013 → T019 → T021 → T030 → T032 → T035 → T038 | 按编号顺序 |
+| `tests/unit/prompt.test.ts` | T014（创建）→ T022 → T026 → T039 | 按编号顺序 |
+| `tests/unit/config.test.ts` | T011（创建）→ T031 | 按编号顺序 |
+| `tests/integration/turn-gate.test.ts` | T015（创建）→ T036 | 按编号顺序 |
+| `src/index.ts` | T004（占位）→ T010 → T018 | 按编号顺序 |
 
 ### Parallel Opportunities
 
 - T003 / T004 并行（不同文件）
 - T006 / T007 / T008 / T011 并行（不同文件）
-- 各故事的**测试任务**彼此并行（不同测试文件或用例段落，注意 `gate.test.ts` 冲突见下）
-- T034 / T035 并行（不同文件）
-
-**同文件冲突提示**：T013、T019、T028、T032 都改 `tests/unit/gate.test.ts`，不可并行；T020、T024、T035 都改 `tests/unit/prompt.test.ts`，不可并行。
+- T012 / T013 / T014 / T015 并行（四个不同测试文件，互不冲突）
+- T025 / T026 并行（不同文件）
+- T038 / T039 / T045 并行（不同文件）
 
 ---
 
 ## Parallel Example: User Story 1
 
 ```bash
-# 三个测试文件互不冲突，可同时开始
+# 四个测试文件互不冲突，可同时开始
 Task: "写 tests/unit/state.test.ts（T012）"
 Task: "写 tests/unit/gate.test.ts（T013）"
-Task: "写 tests/integration/turn-gate.test.ts（T014）"
+Task: "创建 tests/unit/prompt.test.ts（T014）"
+Task: "写 tests/integration/turn-gate.test.ts（T015）"
 
 # 测试全红之后，再依次实现
-Task: "实现 src/tool.ts（T015）"
-Task: "实现 src/gate.ts（T016）"
+Task: "实现 src/tool.ts（T016）"
+Task: "实现 src/gate.ts（T017）"
+Task: "接线 src/index.ts（T018）"
 ```
 
 ---
@@ -220,8 +237,8 @@ Task: "实现 src/gate.ts（T016）"
 2. US1 → 验证 → 可用 MVP
 3. US2 → 验证（不误伤提问）→ 交付
 4. US3 → 验证（截断说明）→ 交付
-5. US4 → 验证（第 5 次提示）→ 交付
-6. US5 → 验证（取消语义）→ 交付
+5. US4 → 验证（阈值提示 + 无上限锁定）→ 交付
+6. US5 → 验证（取消语义 + 不重试锁定）→ 交付
 7. Polish → 审查与文档回填
 
 ### 提交节奏
@@ -236,3 +253,4 @@ Task: "实现 src/gate.ts（T016）"
 - 测试必须先写并确认失败，再写实现（宪法 II）
 - 每个 Checkpoint 都可停下来独立验收
 - 遇到宿主行为与文档不符时，以实测为准并回写 `research.md` 与 `AGENTS.md`
+- 三条 MUST NOT（FR-009 / FR-013 / FR-014）各由一个专门用例锁定，回归时不得删除

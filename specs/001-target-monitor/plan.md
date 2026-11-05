@@ -38,7 +38,7 @@
 |---|---|---|
 | I. 简单性优先 | PASS | 单钩子 + 单工具 + 单状态；无重试器、无内容检测、无持久化 |
 | II. 测试先行 | PASS | 计划要求先落 `node --test` 用例；M1 每个切片带测试 |
-| III. 提示面与状态安全 | PASS（1 条例外，见 CT-1） | 仅走日志通道；来源归属；非授权声明；取消不复活 |
+| III. 提示面与状态安全 | PASS | 仅走日志通道；来源归属；非授权声明；取消不复活。预算策略为"不设上限 + 第 5 次用户通知"，已随宪法 v1.1.0 的措辞修订对齐（见 Sync Impact Report） |
 | IV. 原子提交与主干开发 | PASS | 切片 M1–M3 各自独立提交 |
 | V. 不审查不合并 | PASS | 切片完成后按五轴审查；触碰注入/边界须过安全轴 |
 | VI. 可读性与显式契约 | PASS | `contracts/` 定义工具与消息契约；导出显式类型 |
@@ -69,6 +69,7 @@ src/
 ├── index.ts             # 插件入口：name / inject / Config / apply
 ├── config.ts            # schemastery 配置与快速失败校验
 ├── state.ts             # (agent, turn) → 目标状态、修复计数、通知标记
+├── cause.ts             # 从 assistant-stream 的 finish 块记录 StopCause
 ├── gate.ts              # turn-stopping 判定：放行 / 提醒
 ├── tool.ts              # target_status 工具注册
 ├── prompt.ts            # 系统提示词章节与自救提醒文案
@@ -76,8 +77,10 @@ src/
 
 tests/
 ├── unit/
+│   ├── config.test.ts   # 配置校验：非法值必须抛出
 │   ├── state.test.ts    # 状态与轮次重置
 │   ├── gate.test.ts     # 放行 / 提醒 / 取消 / 无上限 / 第 5 次通知
+│   ├── cause.test.ts    # FinishReason → StopCause 归一化
 │   └── prompt.test.ts   # 文案必须含非授权条款与三个出口
 └── integration/
     └── turn-gate.test.ts # 假 agent 上跑完整收尾流程
@@ -90,11 +93,9 @@ scripts/
 
 ## Complexity Tracking
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|---|---|---|
-| **CT-1**：宪法 III 要求"注入必须有上限"，而 FR-009 规定单轮不设修复上限 | 项目所有者明确选择：宁可继续催，也不要把未完成的任务当成完成；放弃会造成用户可见的任务中断 | 硬上限会在"模型需要多次尝试"时把任务判死。折中已采用：第 5 次向用户发 notice 提供人工介入点，且用户可随时取消 |
+无宪法违反项。
 
-**处置建议**：CT-1 是已批准的产品决策，但"原则被常态违反"比"修订原则"更糟。建议在下一次宪法修订时把 III 的措辞改为"注入必须有**明确的预算策略**（上限、阈值或人工介入点）"，使原则与实现一致；在此之前按 CT-1 记录。
+> 历史记录：本计划初稿曾把"不设修复上限"记为 CT-1 例外。`/speckit-analyze` 指出，以"记录例外"方式稀释宪法原则不合规。处置：宪法 III 于 2026-11-05 修订为 v1.1.0，把"必须有上限"改为"必须有明确的预算策略（上限、阈值触发的用户通知、退避或熔断至少其一）"。本特性的"不设上限 + 第 5 次用户通知"因此合规，例外记录撤销。
 
 ## Phase 输出
 

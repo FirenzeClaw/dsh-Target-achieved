@@ -47,7 +47,7 @@ This may mean the task is unfinished, or that your output was cut off.
 2. **三个出口**必须齐全：声明完成、声明等待、继续工作（FR-007）。
 3. 文本**只能**由固定文案与 `reason`/`attempt` 构成；禁止插入文件内容、工具输出、用户输入（FR-016）。
 4. 同一轮内 `attempt === 5` 的提示只出现一次（`noticeShown` 保证）。
-5. 消息长度固定量级（< 1.5 KB），不随上下文增长。
+5. 消息长度固定量级（**< 1.5 KB**），不随上下文增长。该上限是契约的一部分，测试应据此断言。
 
 ## 反例
 
