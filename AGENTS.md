@@ -76,7 +76,7 @@ DSH-Target-achieved/
 
 **当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 191 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。007 的跨进程能力用真实 socket 集成测试与手工双客户端验证（共享计数、强杀后自愈、宽限退出），**尚未在真实多入口场景长期观察**。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
 
-**版本**：`0.4.0`（设置界面改由客户端插件接管；tag 待打）。`0.2.0` 为上游异常自动续行，`0.1.0` 为首个正式发布。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
+**版本**：`0.4.0`（设置界面改由客户端插件接管）。`0.2.0` 为上游异常自动续行，`0.1.0` 为首个正式发布。四个版本都已打 tag 并推送：`v0.1.0`（首个发布）、`v0.2.0`（上游续行）、`v0.3.0`（跨进程守护）、`v0.4.0`（设置界面接管）。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
 
 **守护进程实测（2026-11-05）**：单次 RPC 0.13 毫秒（500 次平均）；空闲 RSS 51 MiB、2000 次请求后 58 MiB；socket 权限 0600、`run/` 目录 0700。这些数字写在 README「开销」与 `specs/007-daemon/plan.md`，改动实现后需重测。
 
@@ -113,6 +113,15 @@ DSH-Target-achieved/
 - `@deepseek-ai/dsh-goal`：持久 goal（`objective` / `phase: active|paused|blocked|complete` / `maxGoalRounds` / `revision` CAS），进程内 `activation: armed|disarmed`
 - `@deepseek-ai/dsh-tool-goal`：`get_goal` / `create_goal` / `update_goal`；`create`/`edit`/`pause`/`resume` 要求顶层人类直接请求；`complete`/`blocked` 在自主 Goal Round 中允许，`blocked` 需连续 N 轮（默认 3）
 - `@deepseek-ai/dsh-goal-round-driver`：agent idle 且 goal active+armed 且有额度时，用 `agent.followup()` 排入 `<goal_round>` 提示词；**遇 max tokens / 持久化失败 / 取消 / 额度耗尽即停止，异常不自动重试**——这正是本插件要补的缺口
+
+**客户端插件（浏览器端）**：宿主只服务**已构建**的产物，缺文件会**启动即失败**（`dsh-client-modules/README.md`「Build requirements」）。
+
+- 产物格式：`window.__ModuleLoader__.load({ id, factory: (require) => { /* CommonJS */ } })`，依赖经**裸模块名** `require` 从宿主模块表取；相对路径不被解析。
+- 声明：`package.json` 的 `dsh.client.platform = "web"` + `exports["./client"]`。
+- 模块表里有 `react`、`react/jsx-runtime`、`@deepseek-ai/dsh-client-ui-primitives` 等；实测宿主自身的客户端产物开头与本包一致。
+- 分区注册：`ctx.slots.inject("settings.section", () => ctx.slots.register({ name, id, order, label }, Component))`，客户端 `inject` 至少含 `slots`。
+- 配置读写：`ctx.remote.settings.describe()` / `update(ns, patch, expectedRevision)`；返回 `RemoteResult<T> = { ok: true, value } | { ok: false, error }`；冲突码 `SETTINGS_CONFLICT`。
+- 本包的构建方式：`tsc -p tsconfig.client.json` 出 CommonJS，再由 `scripts/build-client.mjs` 套包装（**不引入 bundler**）；客户端因此必须单文件。
 
 **本机路径**（只读参考，不要修改宿主安装）：
 
@@ -179,7 +188,7 @@ DSH-Target-achieved/
 
 README 的「覆盖边界」与「能力声明」两节是事实陈述，不是免责条款。改写时保持陈述语气（"插件判定 X"、"插件不读取 Y"），不要退化成"不承担任何责任"式的法律话术——那既不增加信息，又让人读不出真实边界。
 
-六条事实：
+七条事实：
 
 1. 插件判定的是"收尾时有没有调用过 `target_status`"；任务是否真的完成由模型判断。模型在未完成时声明 `done`，插件放行。
 2. 注入是提醒，不是命令。模型可以忽略它继续收尾；同一轮会再次注入，不设硬上限（第 5 次向用户发一次提示）。
@@ -187,6 +196,8 @@ README 的「覆盖边界」与「能力声明」两节是事实陈述，不是�
 4. 用户取消轮次后不再注入，也不复活该轮；下一次用户输入恢复门控。
 5. 留痕是旁路：写盘失败时插件继续判定与注入，只告警一次。
 6. **上游断流按错误码区别对待。** 单次失败由宿主 `agent/request-error` 重试；重试耗尽后轮次以 `error` 结束，宿主**不派发** `agent/turn-stopping`（`dsh-agent-loop/lib/index.js:1001` 在正常收尾路径内）。插件在 `agent/error` 上补轮次级恢复：可重试码（`RATE_LIMIT`/`SERVER`/`TIMEOUT`/`TRANSPORT`/`EMPTY_RESPONSE`）自动续行，默认上限 3 次、正常收尾清零；`AUTH`/`QUOTA`/`CONTEXT_WINDOW_EXCEEDED` 不续行。**取消路径不派发 `agent/error`**（`index.js:1010-1016` 命中 abort 分支直接 throw），相关判断是防御性的。
+
+7. **初始注入可关闭，关闭即整体退出。** `declarationSection` 为 `false` 时，章节、`target_status`、收尾门、上游续行四者一起停——没有声明通道时保留门禁，只会无限催促一个模型无法满足的条件。该开关决定注册行为，按启动时取值；`enabled` 等其余开关仍即时生效。
 
 **开销**（README「开销」节有实测数字）：系统提示词章节 433 字符/轮；提醒 647 字符/次；复述 306 字符，每累计 3 次遗忘出现一次。上游续行的代价是**一整轮上下文重发**，因此有 3 次上限。真实成本是"可能多一轮"，实测注入响应中位数约 9.6 秒。
 
