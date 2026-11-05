@@ -14,6 +14,7 @@ import { LlmError } from '@deepseek-ai/dsh-llm'
 import { apply } from '../../src/index.ts'
 import { repairText } from '../../src/prompt.ts'
 import { forgetResume, resumeStateOf } from '../../src/resume.ts'
+import { resetTraceState, recentTraces } from '../../src/trace.ts'
 
 interface FakeAgent {
   agent: Agent
@@ -41,6 +42,8 @@ interface Harness {
   startFrame(agent: Agent, turn: number): void
   /** 触发一次 finish 帧。 */
   finish(agent: Agent, kind: 'stop' | 'tool-calls' | 'max-tokens' | 'error'): void
+  /** 触发一次 agent/disposed。 */
+  dispose(agent: Agent): void
   /** 清空投递记录。 */
   reset(agent: FakeAgent): void
 }
@@ -83,6 +86,9 @@ function harness(roots: Agent[], config: Record<string, unknown> = {}): Harness 
         frame: { type: 'chunk', chunk: { type: 'finish', reason: { kind } } },
       })
     },
+    dispose(agent) {
+      listeners.get('agent/disposed')?.({ agent })
+    },
     reset(f) {
       f.steered.length = 0
     },
@@ -93,6 +99,10 @@ function harness(roots: Agent[], config: Record<string, unknown> = {}): Harness 
 const flush = async (): Promise<void> => {
   for (let i = 0; i < 4; i += 1) await Promise.resolve()
 }
+
+test.afterEach(() => {
+  resetTraceState()
+})
 
 test('US1：可重试错误后自动投递一条自救提醒，文案复用收尾门的正文', async () => {
   const f = fakeAgent()
@@ -222,4 +232,52 @@ test('US2：whenIdle 拒绝或 steer 抛错时，异常被吞掉且不影响后�
 
   assert.doesNotThrow(() => h.error(throwing, 2, new LlmError('rl', 'RATE_LIMIT')))
   await flush()
+})
+
+
+test('US3：连续四次可重试错误，前三次投递、第四次停手', async () => {
+  const f = fakeAgent()
+  const h = harness([f.agent], { maxResumes: 3 })
+
+  for (let turn = 1; turn <= 4; turn += 1) {
+    h.error(f.agent, turn, new LlmError('rate limited', 'RATE_LIMIT'))
+    await flush()
+  }
+
+  assert.equal(f.steered.length, 3, '达到上限后必须停手')
+  assert.equal(resumeStateOf(f.agent)?.consecutive, 3)
+
+  // 上限之后的错误仍要留痕，否则"为什么没续"无从查起。
+  const capped = recentTraces().filter((entry) => entry.reason === 'upstream-capped')
+  assert.equal(capped.length, 1)
+  assert.equal(capped[0]?.turn, 4)
+  assert.equal(capped[0]?.errorCode, 'RATE_LIMIT')
+})
+
+test('US3：maxResumes 为 0 时一次都不续行', async () => {
+  const f = fakeAgent()
+  const h = harness([f.agent], { maxResumes: 0 })
+
+  h.error(f.agent, 1, new LlmError('rate limited', 'RATE_LIMIT'))
+  await flush()
+
+  assert.equal(f.steered.length, 0)
+  assert.equal(recentTraces().filter((entry) => entry.reason === 'upstream-capped').length, 1)
+})
+
+test('US3：dispose 之后不再投递，且状态被清理', async () => {
+  const f = fakeAgent()
+  const h = harness([f.agent])
+
+  h.error(f.agent, 1, new LlmError('rate limited', 'RATE_LIMIT'))
+  await flush()
+  assert.equal(f.steered.length, 1)
+
+  h.dispose(f.agent)
+  assert.equal(resumeStateOf(f.agent), undefined, 'dispose 必须清掉状态')
+
+  h.reset(f)
+  h.error(f.agent, 2, new LlmError('rate limited', 'RATE_LIMIT'))
+  await flush()
+  assert.equal(f.steered.length, 0, '已 dispose 的 agent 不得再被投递')
 })

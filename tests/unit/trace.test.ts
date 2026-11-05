@@ -169,3 +169,25 @@ test('既有六种 reason 语义与计数不变', () => {
   assert.equal(entry?.reason, 'aborted')
   assert.equal(entry?.attempt, 0)
 })
+
+test('新增 reason 不会被既有过滤条件误命中', () => {
+  withTempDir()
+  const agent = asAgent()
+  recordTrace(agent, { turn: 1, outcome: 'injected', reason: 'undeclared', attempt: 1 })
+  recordTrace(agent, { turn: 2, outcome: 'injected', reason: 'upstream-resumed', attempt: 1, errorCode: 'TIMEOUT' })
+  recordTrace(agent, { turn: 3, outcome: 'released', reason: 'upstream-skipped', attempt: 0, errorCode: 'AUTH' })
+  recordTrace(agent, { turn: 4, outcome: 'released', reason: 'upstream-capped', attempt: 0, errorCode: 'SERVER' })
+
+  const all = recentTraces()
+  // 等价于 jq 'select(.reason == "undeclared")' —— 旧查询只应当命中旧记录。
+  assert.equal(all.filter((entry) => entry.reason === 'undeclared').length, 1)
+  // 等价于 jq 'select(.outcome == "injected")' —— 注入视角只看投递过的。
+  assert.equal(all.filter((entry) => entry.outcome === 'injected').length, 2)
+  // 续行三类都带错误码，排查时能直接看出是哪类上游故障。
+  const upstream = all.filter((entry) => entry.reason.startsWith('upstream-'))
+  assert.equal(upstream.length, 3)
+  assert.deepEqual(
+    upstream.map((entry) => entry.errorCode).sort(),
+    ['AUTH', 'SERVER', 'TIMEOUT'],
+  )
+})
