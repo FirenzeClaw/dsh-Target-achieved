@@ -46,7 +46,8 @@
 - **跨轮复述**：累计遗忘达阈值后，下一次提醒末尾追加声明规范复述。
 - **上游续行**：可重试的上游错误（限流、超时、连接中断）在重试耗尽后自动续行一轮，默认上限 3 次；不可重试错误与用户取消不续行。
 - **判定留痕**：每次判定落一条 JSONL 记录，放行也记，九种原因可区分（六种收尾门 + 三种上游续行）。
-- **设置页可改**：`enabled` / `reminderThreshold` / `reactionWindowMs` / `resumeOnUpstreamError` / `maxResumes` 在宿主设置页即时生效。
+- **设置页可改**：全部八个字段集中在「设置 → 目标监测」分区，写回带 revision 冲突检测；除 `crossProcess` / `declarationSection` 外即时生效。
+- **可关闭初始注入**：关掉 `declarationSection` 后不再注册提示词章节与 `target_status`，设置页同时给出可复制的 `AGENTS.md` 片段。
 - **跨进程共享**：多个 DSH 入口（web / CLI）共用同一个守护进程，遗忘与续行计数跨入口累计；留痕由它单写，不会交错。守护进程不可用时自动退回进程内判定。
 - **三种安装方式**：bundle、git 源、本地 link。
 
@@ -103,7 +104,15 @@ dsh plugin --profile web add /path/to/DSH-Target-achieved
 | `crossProcess` | boolean | `true` | 是 | 是否使用跨进程守护；关闭后强制进程内判定（启动期生效） |
 | `declarationSection` | boolean | `true` | 是 | 是否注入声明规范；关闭后工具与收尾门一并停用（启动期生效） |
 
-标记为"设置页"的字段声明为 `volatile`，改动后立即生效，无需重启。两个例外是 `crossProcess` 与 `declarationSection`：它们决定**注册什么**（socket 连接、系统提示词章节、工具），因此按启动时取值，改动需重启 DSH。`stallNoticeThreshold` 参与告警节奏，热改语义尚未在真实会话中验证，当前只支持通过 `cordis.patch.yml` 修改。
+标记为"设置页"的字段声明为 `volatile`，改动后立即生效，无需重启。两个例外是 `crossProcess` 与 `declarationSection`：它们决定**注册什么**（socket 连接、系统提示词章节、工具），因此按启动时取值，改动需重启 DSH。
+
+### 设置界面
+
+八个字段都在「设置 → 目标监测」里，由插件自带的客户端分区渲染，不是宿主按 `volatile` 字段自动生成的表单——自动表单只能给出输入框，承载不了「关闭初始注入后该怎么办」这类说明与复制按钮。
+
+写回走宿主的 `settings.update` 并带 `revision`：若同一份配置在别处被改过，保存会被拒绝并提示刷新，而不是静默覆盖。
+
+关闭 `declarationSection` 后，分区里会出现一段可直接写进用户级 `AGENTS.md`（`~/.dsh/AGENTS.md`）的文本，并配两个复制按钮（规范正文 / `AGENTS.md` 片段）。文本由构建期从宿主侧常量注入客户端产物，因此设置页复制的与真实注入的永远一致。`stallNoticeThreshold` 参与告警节奏，热改语义尚未在真实会话中验证，当前只支持通过 `cordis.patch.yml` 修改。
 
 非法值在保存或启动时抛出并指明字段，不回退默认值——静默回退会让"改了没反应"成为最难排查的一类故障。
 

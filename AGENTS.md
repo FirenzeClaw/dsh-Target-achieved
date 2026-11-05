@@ -36,6 +36,7 @@ DSH-Target-achieved/
 │   ├── monitor/               # 判定通道：types / plan（纯函数）/ compose / local / remote
 │   ├── ipc/                   # 守护进程传输：protocol / client / launcher
 │   ├── daemon/                # 守护进程：main（生命周期）/ server（分发）/ state（状态表）
+│   ├── client/                # 浏览器端：设置分区（单文件 + shims.d.ts）
 │   ├── prompt.ts              # 系统提示词章节与固定文案
 │   ├── notices.ts             # 消息来源归属与构造
 │   └── turn.ts                # 轮次来源（声明与判定共用）
@@ -43,6 +44,7 @@ DSH-Target-achieved/
 │   ├── unit/                  # state / config / cause / prompt / gate / forget / trace / manifest
 │   └── integration/           # 假 agent 上的完整收尾流程
 ├── scripts/link-host.sh       # 开发期链接宿主 @deepseek-ai 包
+├── scripts/build-client.mjs   # 把 tsc 的 CJS 客户端产物套上 ModuleLoader 包装
 ├── docs/
 │   └── PLUGIN-DESIGN.md       # 设计取舍 + 宿主事件面调研结论（事实来源）
 ├── specs/
@@ -65,15 +67,16 @@ DSH-Target-achieved/
 ## 构建与运行
 
 - 安装：`npm install`（peer 依赖由宿主提供，本地用 `bash scripts/link-host.sh` 链接；已装 `typescript@5.9.3`、`@types/node`）
-- 构建：`npm run build` → `tsc -p tsconfig.json`，产物在 `dist/`，`.ts` 导入后缀会被重写为 `.js`
-- 类型检查：`npm run typecheck` → `tsc -p tsconfig.json --noEmit`
+- 构建：`npm run build` → `tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build-client.mjs`；服务端产物在 `dist/`，客户端 bundle 在 `dist/client.js`
+- 客户端构建约束：产物必须是 `window.__ModuleLoader__.load({id, factory})` 包装的 CommonJS，依赖只走裸模块名；`build-client.mjs` 会在出现相对 `require` 时直接报错
+- 类型检查：`npm run typecheck` → 两个工程都过一遍：`tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit`
 - 测试：`npm test` → `node --test`（Node 24 原生类型剥离，零测试框架依赖）
 - 守护进程手工验证：`node dist/daemon/main.js --socket /tmp/tm.sock --pid /tmp/tm.pid`（前台跑，Ctrl-C 退出）
 - 挂载：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
 
-**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 183 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。007 的跨进程能力用真实 socket 集成测试与手工双客户端验证（共享计数、强杀后自愈、宽限退出），**尚未在真实多入口场景长期观察**。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 191 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。007 的跨进程能力用真实 socket 集成测试与手工双客户端验证（共享计数、强杀后自愈、宽限退出），**尚未在真实多入口场景长期观察**。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
 
-**版本**：`0.3.0`（新增跨进程守护；tag 待打）。`0.2.0` 为上游异常自动续行，`0.1.0` 为首个正式发布。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
+**版本**：`0.4.0`（设置界面改由客户端插件接管；tag 待打）。`0.2.0` 为上游异常自动续行，`0.1.0` 为首个正式发布。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
 
 **守护进程实测（2026-11-05）**：单次 RPC 0.13 毫秒（500 次平均）；空闲 RSS 51 MiB、2000 次请求后 58 MiB；socket 权限 0600、`run/` 目录 0700。这些数字写在 README「开销」与 `specs/007-daemon/plan.md`，改动实现后需重测。
 

@@ -5,6 +5,25 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] - 2026-11-05
+
+### Added
+
+- **设置界面改由客户端插件接管**（spec 008）：注册 `settings.section` 分区，把八个配置字段与「关闭初始注入后的 AGENTS.md 建议」放在同一页，写回走 `settings.update` 并带 revision 做冲突检测。此前只有宿主按 volatile 字段自动生成的表单，承载不了建议文案与复制按钮。
+- **两个复制按钮**：关闭初始注入后，可一键复制规范正文或写进用户级 `AGENTS.md` 的片段。文本在构建期从宿主侧常量注入客户端产物，不另存一份，避免两处漂移。
+- `declarationSection` 配置项（默认 `true`）：关闭后不注册系统提示词章节、不注册 `target_status`，收尾门与上游续行一并停用。
+
+### Changed
+
+- 构建链新增一步：`tsc` 编出 CommonJS 客户端代码后，由 `scripts/build-client.mjs` 套上宿主要求的 `window.__ModuleLoader__.load` 包装。**未引入 bundler**——客户端保持单文件，脚本会在产物含相对 `require` 时直接报错。
+- `npm run build` 与 `npm run typecheck` 现在都覆盖客户端工程。
+
+### Notes
+
+- `declarationSection` 决定的是注册行为，无法在运行中撤销，因此按启动时的取值生效，改动需重启；`enabled` 等其余开关仍即时生效。
+- 关闭初始注入后若仍希望模型声明状态，需要把设置页给出的片段写进用户级 `AGENTS.md`——插件不再替用户注入。
+
+
 ## [0.3.0] - 2026-11-05
 
 ### Added
