@@ -11,10 +11,19 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { forgetCause, recordFinish } from './cause.ts'
 import { forgetForgetful, noteDeclaration } from './forget.ts'
+import {
+  claimResumeTurn,
+  classifyUpstreamError,
+  forgetResume,
+  noteResume,
+  resetResume,
+  resumeStateOf,
+} from './resume.ts'
 import { Config, resolveConfig, snapshot, type TargetMonitorConfig } from './config.ts'
 import { createNotice } from './notices.ts'
-import { DECLARATION_SECTION } from './prompt.ts'
+import { DECLARATION_SECTION, repairText } from './prompt.ts'
 import { handleTurnStopping, type GateDeps } from './gate.ts'
+import { noticeSummary } from './notices.ts'
 import { forget } from './state.ts'
 import { registerTargetStatus } from './tool.ts'
 import { configureTrace, recordTrace } from './trace.ts'
@@ -45,6 +54,19 @@ let streamSeen = false
 
 /** 降级提示只打印一次。 */
 let warnedNoStream = false
+
+/**
+ * 取错误码用于留痕。
+ *
+ * 非 `LlmError` 一律记为 `UNKNOWN`：留着原始 message 会把 provider 文本写进
+ * 留痕文件，既无助于分类，又多一处需要脱敏的地方。
+ * @param error - 原始错误
+ * @returns 稳定的错误码字符串
+ */
+function errorCodeOf(error: unknown): string {
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' && code !== '' ? code : 'UNKNOWN'
+}
 
 /**
  * 插件入口。
@@ -114,6 +136,65 @@ export function apply(ctx: Context, rawConfig: unknown): void {
     }
   })
 
+  /**
+   * 上游异常后的轮次级恢复（spec 006）。
+   *
+   * 为什么不能在这里直接投递：`agent/error` 派发时轮次仍是 `running`，此时
+   * `wakeDriver` 不置 `wakeRequested`（`dsh-agent-loop/lib/index.js:854-860`），
+   * 消息只会躺在队列里——看起来注入成功，实际要等下次用户输入才被消费。
+   * 所以只做判定与登记，真正投递推到 `whenIdle()` 之后。
+   */
+  ctx.on('agent/error', (payload) => {
+    const errorClass = classifyUpstreamError(payload.error)
+    if (errorClass !== 'retryable') {
+      recordTrace(payload.agent, {
+        turn: payload.turn,
+        outcome: 'released',
+        reason: 'upstream-skipped',
+        attempt: 0,
+        errorCode: errorCodeOf(payload.error),
+      })
+      return
+    }
+
+    // 先占轮次再排队：同一轮可能触发多次 agent/error（例如 turn/end 落盘失败），
+    // 不在此去重就会排入两条 whenIdle 回调、投递两次。
+    if (!claimResumeTurn(payload.agent, payload.turn)) return
+
+    const agent = payload.agent
+    const turn = payload.turn
+    const errorCode = errorCodeOf(payload.error)
+
+    void agent.whenIdle().then(() => {
+      const current = snapshot(config)
+      const state = resumeStateOf(agent)
+
+      // 等待期间用户可能已经取消、关闭开关或换了目标：投递前必须重新核对。
+      if (!current.enabled || !current.resumeOnUpstreamError) return
+      if (!ctx.agents.roots().includes(agent)) return
+      if ((state?.consecutive ?? 0) >= current.maxResumes) {
+        recordTrace(agent, {
+          turn,
+          outcome: 'released',
+          reason: 'upstream-capped',
+          attempt: 0,
+          errorCode,
+        })
+        return
+      }
+
+      agent.steer(createNotice(repairText('undeclared', 1), noticeSummary(turn, 'upstream', 1)))
+      noteResume(agent)
+      recordTrace(agent, {
+        turn,
+        outcome: 'injected',
+        reason: 'upstream-resumed',
+        attempt: 1,
+        errorCode,
+      })
+    })
+  })
+
   ctx.on('agent/assistant-stream', (payload) => {
     const { frame } = payload
     // 轮次只在 start 帧上；chunk 帧没有 turn 字段。
@@ -131,6 +212,11 @@ export function apply(ctx: Context, rawConfig: unknown): void {
     const turn = streamTurn.get(payload.agent)
     if (turn === undefined) return
     recordFinish(payload.agent, turn, frame.chunk.reason)
+
+    // 正常结束证明上游通了，连续失败计数清零；error / aborted 不清零，
+    // 否则连续故障永远攒不到上限。
+    const kind = frame.chunk.reason.kind
+    if (kind === 'stop' || kind === 'tool-calls' || kind === 'max-tokens') resetResume(payload.agent)
   })
 
   ctx.on('agent/disposed', (payload) => {
@@ -138,5 +224,6 @@ export function apply(ctx: Context, rawConfig: unknown): void {
     forgetCause(payload.agent)
     forgetTurn(payload.agent)
     forgetForgetful(payload.agent)
+    forgetResume(payload.agent)
   })
 }
