@@ -27,7 +27,8 @@ DSH-Target-achieved/
 │   ├── gate.ts                # 收尾门判定与注入策略
 │   ├── tool.ts                # target_status 工具
 │   ├── prompt.ts              # 系统提示词章节与固定文案
-│   └── notices.ts             # 消息来源归属与构造
+│   ├── notices.ts             # 消息来源归属与构造
+│   └── turn.ts                # 轮次来源（声明与判定共用）
 ├── tests/
 │   ├── unit/                  # state / config / cause / prompt / gate
 │   └── integration/           # 假 agent 上的完整收尾流程
@@ -35,7 +36,8 @@ DSH-Target-achieved/
 ├── docs/
 │   └── PLUGIN-DESIGN.md       # 设计取舍 + 宿主事件面调研结论（事实来源）
 ├── specs/
-│   └── 001-target-monitor/    # 收尾门特性：spec / plan / tasks / contracts
+│   ├── 001-target-monitor/    # 收尾门特性：spec / plan / tasks / contracts
+│   └── 002-turn-key-alignment/ # 轮次键对齐：声明与判定共用同一轮次
 ├── .specify/                  # speckit 脚手架
 │   └── memory/constitution.md # 项目宪法（v1.1.0）
 └── .dsh/skills/               # speckit-* 技能
@@ -53,7 +55,9 @@ DSH-Target-achieved/
 - 测试：`npm test` → `node --test`（Node 24 原生类型剥离，零测试框架依赖）
 - 挂载：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
 
-**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 38 项全通过。宿主事件面只做了单元/集成替身验证，**尚未在真实会话中跑通** -- 见 `specs/001-target-monitor/quickstart.md` 的待验证项。
+**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 53 项全通过。真实加载器已能挂载插件（`target_status` 进入工具注册表、启动无 inactive 告警）；轮次收尾门已在真实会话验证（未声明→注入、声明后→放行）；**阈值提示（第 5 次未声明）与缺陷二仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+
+> 2026-11-05 修复两处：① `apply` 会对宿主已解析的配置重跑 `Config`，volatile 的 `enabled` 被当成布尔值校验，插件整条 entry 变 inactive（见 `src/config.ts` 的 `isVolatileRef`）；② 声明曾写到上一轮的键上（spec 002），轮次来源已统一到 `src/turn.ts`，写入点在 `assistant-stream` 的 `start` 帧。
 
 > 任何新增脚本都要在这里写实命令；未在本节出现的命令不得在交付说明里声称"已通过"。
 <!-- /AUTO:BUILD -->
