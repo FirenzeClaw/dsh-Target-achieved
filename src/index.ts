@@ -18,6 +18,7 @@ import {
   noteResume,
   resetResume,
   resumeStateOf,
+  shouldResume,
 } from './resume.ts'
 import { Config, resolveConfig, snapshot, type TargetMonitorConfig } from './config.ts'
 import { createNotice } from './notices.ts'
@@ -48,6 +49,14 @@ const SECTION_ORDER = 2500
 
 /** 每个 agent 最近一次 assistant 流所属的轮次（由 start 帧给出）。 */
 const streamTurn = new WeakMap<Agent, number>()
+
+/**
+ * 已 dispose 的 agent。
+ *
+ * 用 WeakSet 记录而不只依赖 `forgetResume`：`whenIdle()` 回调可能在 dispose 之后
+ * 才兑现，那时状态早已被删干净，"查不到状态"与"从未续行过"无法区分。
+ */
+const disposed = new WeakSet<Agent>()
 
 /** 是否至少收到过一次 finish 帧；用于判断 assistant-stream 契约是否可用。 */
 let streamSeen = false
@@ -145,41 +154,49 @@ export function apply(ctx: Context, rawConfig: unknown): void {
    * 所以只做判定与登记，真正投递推到 `whenIdle()` 之后。
    */
   ctx.on('agent/error', (payload) => {
-    const errorClass = classifyUpstreamError(payload.error)
+    // 监听器内的异常绝不能外溢：它跑在宿主的错误传播路径上，
+    // 再抛一次只会把真正的上游错误替换成插件自己的堆栈。
+    try {
+      scheduleResume({ agent: payload.agent, turn: payload.turn, error: payload.error })
+    } catch (error: unknown) {
+      console.warn('target-monitor: 续行判定失败，本轮按错误结束处理', error)
+    }
+  })
+
+  /**
+   * 判定并排队一次续行。
+   * @param input - 事件负载中的 agent、轮次与错误
+   */
+  function scheduleResume(input: { agent: Agent; turn: number; error: unknown }): void {
+    const { agent, turn, error } = input
+    const errorCode = errorCodeOf(error)
+    const errorClass = classifyUpstreamError(error)
     if (errorClass !== 'retryable') {
-      recordTrace(payload.agent, {
-        turn: payload.turn,
-        outcome: 'released',
-        reason: 'upstream-skipped',
-        attempt: 0,
-        errorCode: errorCodeOf(payload.error),
-      })
+      recordTrace(agent, { turn, outcome: 'released', reason: 'upstream-skipped', attempt: 0, errorCode })
       return
     }
 
     // 先占轮次再排队：同一轮可能触发多次 agent/error（例如 turn/end 落盘失败），
     // 不在此去重就会排入两条 whenIdle 回调、投递两次。
-    if (!claimResumeTurn(payload.agent, payload.turn)) return
-
-    const agent = payload.agent
-    const turn = payload.turn
-    const errorCode = errorCodeOf(payload.error)
+    if (!claimResumeTurn(agent, turn)) return
 
     void agent.whenIdle().then(() => {
+      // 等待期间用户可能已经取消、关闭开关或换了目标：投递前必须重新核对，
+      // 否则一次迟到的投递就会绕过用户刚刚做出的决定。
       const current = snapshot(config)
-      const state = resumeStateOf(agent)
+      const decision = shouldResume({
+        enabled: current.enabled,
+        resumeOnUpstreamError: current.resumeOnUpstreamError,
+        maxResumes: current.maxResumes,
+        consecutive: resumeStateOf(agent)?.consecutive ?? 0,
+        isRoot: ctx.agents.roots().includes(agent),
+        isDisposed: disposed.has(agent),
+        // 占用已在监听器同步阶段完成，这里不再判 sameTurn。
+        sameTurn: false,
+      })
 
-      // 等待期间用户可能已经取消、关闭开关或换了目标：投递前必须重新核对。
-      if (!current.enabled || !current.resumeOnUpstreamError) return
-      if (!ctx.agents.roots().includes(agent)) return
-      if ((state?.consecutive ?? 0) >= current.maxResumes) {
-        recordTrace(agent, {
-          turn,
-          outcome: 'released',
-          reason: 'upstream-capped',
-          attempt: 0,
-          errorCode,
-        })
+      if (!decision.resume) {
+        recordTrace(agent, { turn, outcome: 'released', reason: decision.reason, attempt: 0, errorCode })
         return
       }
 
@@ -192,8 +209,12 @@ export function apply(ctx: Context, rawConfig: unknown): void {
         attempt: 1,
         errorCode,
       })
+    }).catch((error: unknown) => {
+      // whenIdle 或回调内的异常同样不能变成 unhandledRejection：
+      // 那会在测试里静默失败，在生产里变成一条无人处理的告警。
+      console.warn('target-monitor: 续行投递失败，本轮不续行', error)
     })
-  })
+  }
 
   ctx.on('agent/assistant-stream', (payload) => {
     const { frame } = payload
@@ -220,6 +241,7 @@ export function apply(ctx: Context, rawConfig: unknown): void {
   })
 
   ctx.on('agent/disposed', (payload) => {
+    disposed.add(payload.agent)
     forget(payload.agent)
     forgetCause(payload.agent)
     forgetTurn(payload.agent)

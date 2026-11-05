@@ -166,3 +166,60 @@ test('US1：error / aborted 帧不清零', async () => {
 
   forgetResume(f.agent)
 })
+
+test('US2：不可恢复的错误、关闭的开关、非顶层 agent 都不投递', async () => {
+  const cases: { name: string; roots: 'root' | 'none'; config?: Record<string, unknown>; error: unknown }[] = [
+    { name: 'AUTH', roots: 'root', error: new LlmError('bad key', 'AUTH') },
+    { name: 'QUOTA', roots: 'root', error: new LlmError('quota', 'QUOTA') },
+    { name: 'CONTEXT_WINDOW_EXCEEDED', roots: 'root', error: new LlmError('too long', 'CONTEXT_WINDOW_EXCEEDED') },
+    { name: 'AGENTS.md 非 LlmError', roots: 'root', error: new Error('boom') },
+    { name: 'enabled=false', roots: 'root', config: { enabled: false }, error: new LlmError('rl', 'RATE_LIMIT') },
+    {
+      name: 'resumeOnUpstreamError=false',
+      roots: 'root',
+      config: { resumeOnUpstreamError: false },
+      error: new LlmError('rl', 'RATE_LIMIT'),
+    },
+    { name: '非顶层 agent', roots: 'none', error: new LlmError('rl', 'RATE_LIMIT') },
+  ]
+
+  for (const item of cases) {
+    const f = fakeAgent()
+    const h = harness(item.roots === 'root' ? [f.agent] : [], item.config)
+    h.error(f.agent, 2, item.error)
+    await flush()
+    assert.equal(f.steered.length, 0, item.name)
+    forgetResume(f.agent)
+  }
+})
+
+test('US2：whenIdle 拒绝或 steer 抛错时，异常被吞掉且不影响后续判定', async () => {
+  const f = fakeAgent()
+  const h = harness([f.agent])
+
+  // 让 whenIdle 返回 reject：若不就地捕获，会产生 unhandledRejection。
+  const rejecting = {
+    id: 'root',
+    inbox: { nextStep: [], nextTurn: [], prepend() {} },
+    whenIdle: () => Promise.reject(new Error('idle failed')),
+    steer: () => {
+      throw new Error('steer failed')
+    },
+  } as unknown as Agent
+
+  assert.doesNotThrow(() => h.error(rejecting, 1, new LlmError('rl', 'RATE_LIMIT')))
+  await flush()
+
+  // 另一条路径：steer 抛错也不得外溢。
+  const throwing = {
+    id: 'root',
+    inbox: { nextStep: [], nextTurn: [], prepend() {} },
+    whenIdle: () => Promise.resolve(),
+    steer: () => {
+      throw new Error('steer failed')
+    },
+  } as unknown as Agent
+
+  assert.doesNotThrow(() => h.error(throwing, 2, new LlmError('rl', 'RATE_LIMIT')))
+  await flush()
+})

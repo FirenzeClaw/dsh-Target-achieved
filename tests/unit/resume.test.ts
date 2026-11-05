@@ -14,6 +14,7 @@ import {
   noteResume,
   resetResume,
   resumeStateOf,
+  shouldResume,
 } from '../../src/resume.ts'
 
 const asAgent = (id = 'root') => ({ id }) as unknown as Agent
@@ -89,4 +90,42 @@ test('计数按 agent 隔离，互不影响', () => {
   noteResume(a)
   assert.equal(resumeStateOf(a)?.consecutive, 2)
   assert.equal(resumeStateOf(b), undefined)
+})
+
+test('shouldResume：六项前置条件逐项为假时拒绝，并给出原因', () => {
+  const base = {
+    enabled: true,
+    resumeOnUpstreamError: true,
+    maxResumes: 3,
+    consecutive: 0,
+    isRoot: true,
+    isDisposed: false,
+    sameTurn: false,
+  }
+  const cases: { patch: Partial<typeof base>; reason: string }[] = [
+    { patch: { enabled: false }, reason: 'upstream-skipped' },
+    { patch: { resumeOnUpstreamError: false }, reason: 'upstream-skipped' },
+    { patch: { isRoot: false }, reason: 'upstream-skipped' },
+    { patch: { sameTurn: true }, reason: 'upstream-skipped' },
+    { patch: { isDisposed: true }, reason: 'upstream-skipped' },
+    { patch: { consecutive: 3 }, reason: 'upstream-capped' },
+  ]
+
+  assert.deepEqual(shouldResume(base), { resume: true })
+  for (const { patch, reason } of cases) {
+    assert.deepEqual(shouldResume({ ...base, ...patch }), { resume: false, reason }, JSON.stringify(patch))
+  }
+})
+
+test('shouldResume：maxResumes 为 0 时等价于关闭', () => {
+  const decision = shouldResume({
+    enabled: true,
+    resumeOnUpstreamError: true,
+    maxResumes: 0,
+    consecutive: 0,
+    isRoot: true,
+    isDisposed: false,
+    sameTurn: false,
+  })
+  assert.deepEqual(decision, { resume: false, reason: 'upstream-capped' })
 })

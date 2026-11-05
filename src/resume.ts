@@ -112,6 +112,43 @@ export function resetResume(agent: Agent): void {
   state.consecutive = 0
 }
 
+/** 续行判定的输入：全部取自当前配置与运行态，不含时间等外部状态。 */
+export interface ResumeContext {
+  /** 主开关。 */
+  enabled: boolean
+  /** 续行开关。 */
+  resumeOnUpstreamError: boolean
+  /** 连续上限；0 等价于关闭。 */
+  maxResumes: number
+  /** 已连续续行次数。 */
+  consecutive: number
+  /** 是否顶层 agent；子 agent 不设门也不续行。 */
+  isRoot: boolean
+  /** agent 是否已 dispose。 */
+  isDisposed: boolean
+  /** 该轮是否已占用过续行机会。 */
+  sameTurn: boolean
+}
+
+/** 续行判定结果。 */
+export type ResumeDecision = { resume: true } | { resume: false; reason: 'upstream-skipped' | 'upstream-capped' }
+
+/**
+ * 判断此刻是否应当续行。
+ *
+ * 顺序有讲究：先判「根本不该管」（关闭、非顶层、已弃用、本轮已占用），
+ * 再判「管了但额度用完」。否则关闭开关时也会留下 `upstream-capped` 的留痕，
+ * 排查时看不出是配置关的还是真到上限了。
+ * @param context - 判定输入
+ * @returns 是否续行；不续行时给出留痕原因
+ */
+export function shouldResume(context: ResumeContext): ResumeDecision {
+  if (!context.enabled || !context.resumeOnUpstreamError) return { resume: false, reason: 'upstream-skipped' }
+  if (!context.isRoot || context.isDisposed || context.sameTurn) return { resume: false, reason: 'upstream-skipped' }
+  if (context.consecutive >= context.maxResumes) return { resume: false, reason: 'upstream-capped' }
+  return { resume: true }
+}
+
 /**
  * 丢弃某 agent 的全部续行状态。
  * @param agent - 目标 agent
