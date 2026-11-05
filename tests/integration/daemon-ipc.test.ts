@@ -128,7 +128,7 @@ test('留痕由守护进程单写，且每行都是合法 JSON', async () => {
   }
 })
 
-test('同一请求重复发送只生效一次（幂等）', async () => {
+test('副作用请求重复发送只生效一次（幂等）', async () => {
   const { socketPath, daemon } = setup()
   cleanups.push(() => {
     daemon.close()
@@ -142,8 +142,43 @@ test('同一请求重复发送只生效一次（幂等）', async () => {
 
   await client.request({ type: 'turn-start', sessionId: 's', turn: 1, config })
   const first = (await client.request({
-    type: 'turn-stopping',
+    type: 'declare',
     sessionId: 's',
+    turn: 1,
+    state: 'done',
+    config,
+  })) as { forgetCount: number }
+
+  // 同一条 `declare` 重发（例如传输层重试）不得把遗忘计数加两次。
+  const second = (await client.request({
+    type: 'declare',
+    sessionId: 's',
+    turn: 1,
+    state: 'done',
+    config,
+  })) as { forgetCount: number }
+
+  assert.deepEqual(second, first, '重发的副作用请求必须返回首次结果')
+})
+
+test('判定请求不进缓存：同一轮再次收尾要重新判定', async () => {
+  // 幂等只覆盖"重复无意义的写"，不能覆盖判定：门的答案随状态变化，而同一轮
+  // 会被问多次（注入后宿主再跑一步）。缓存回放会让"已声明"永远看不到。
+  const { socketPath, daemon } = setup()
+  cleanups.push(() => {
+    daemon.close()
+  })
+  await waitForSocket(socketPath)
+
+  const client = await connectClient({ socketPath })
+  cleanups.push(() => {
+    client.close()
+  })
+
+  await client.request({ type: 'turn-start', sessionId: 's2', turn: 1, config })
+  const first = (await client.request({
+    type: 'turn-stopping',
+    sessionId: 's2',
     turn: 1,
     finishKind: 'stop',
     aborted: false,
@@ -151,10 +186,9 @@ test('同一请求重复发送只生效一次（幂等）', async () => {
     config,
   })) as { attempt: number }
 
-  // 同一 (sessionId, turn, type) 必须返回缓存结果，而不是把次数加到 2。
   const second = (await client.request({
     type: 'turn-stopping',
-    sessionId: 's',
+    sessionId: 's2',
     turn: 1,
     finishKind: 'stop',
     aborted: false,
@@ -163,7 +197,7 @@ test('同一请求重复发送只生效一次（幂等）', async () => {
   })) as { attempt: number }
 
   assert.equal(first.attempt, 1)
-  assert.equal(second.attempt, 1)
+  assert.equal(second.attempt, 2, '第二次收尾是新的一次判定，注入次数应当递增')
 })
 
 test('协议版本不匹配时拒绝连接', async () => {
@@ -232,4 +266,54 @@ test('最后一个连接断开后，宽限期到点即退出并清理文件', as
   assert.equal(exited, true, '宽限期结束后必须触发退出')
   assert.equal(existsSync(socketPath), false, 'socket 文件必须被清理')
   assert.equal(existsSync(pidPath), false, 'pid 文件必须被清理')
+})
+
+test('同一轮内声明后再次收尾，必须重新判定而不是回放旧结果', async () => {
+  // 回归：幂等缓存曾把 `turn-stopping` 也缓存起来（键 `session:turn:type`）。
+  // 门注入后宿主会再跑一步、同一轮再次收尾，于是第二次请求命中缓存，
+  // 又拿到 inject:true —— 注入、再注入，永远停不下来，且缓存短路不写留痕。
+  const { socketPath, daemon, home } = setup()
+  cleanups.push(() => {
+    daemon.close()
+  })
+  await waitForSocket(socketPath)
+
+  const traceDir = join(home, 'logs')
+  configureTrace({ dir: traceDir })
+
+  const client = await connectClient({ socketPath })
+  cleanups.push(() => client.close())
+
+  const first = (await client.request({
+    type: 'turn-stopping',
+    sessionId: 'loop-check',
+    turn: 1,
+    finishKind: 'stop',
+    aborted: false,
+    isRoot: true,
+    config,
+  })) as { inject: boolean }
+  assert.equal(first.inject, true, '未声明时应当注入')
+
+  await client.request({
+    type: 'declare',
+    sessionId: 'loop-check',
+    turn: 1,
+    state: 'done',
+    config,
+  })
+
+  const second = (await client.request({
+    type: 'turn-stopping',
+    sessionId: 'loop-check',
+    turn: 1,
+    finishKind: 'stop',
+    aborted: false,
+    isRoot: true,
+    config,
+  })) as { inject: boolean }
+  assert.equal(second.inject, false, '已声明就不该再注入；回放旧结果会变成无限注入')
+
+  const lines = readFileSync(join(traceDir, 'gate-trace.jsonl'), 'utf8').split('\n').filter(Boolean)
+  assert.equal(lines.length, 2, '两次收尾都要留痕；被缓存短路的那次会漏掉')
 })

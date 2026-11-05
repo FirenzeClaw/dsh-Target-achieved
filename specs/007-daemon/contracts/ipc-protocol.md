@@ -81,6 +81,11 @@
 
 - **C-007**：守护进程 MUST 按 `(sessionId, turn, type)` 缓存首次成功的结果；同键再次到达时 MUST 返回缓存结果，MUST NOT 重复计数或重复写留痕。
 - **C-008**：缓存 MUST 只保留最近 256 个 `(sessionId, turn, type)` 组合，超出按插入顺序淘汰。
+- **C-008a**：缓存 MUST 只覆盖有副作用且重复无意义的请求（`turn-start` / `declare` / `finish` / `dispose`）。
+  判定类请求（`turn-stopping` / `upstream-error` / `resume-confirm`）MUST NOT 进缓存：它们的答案随状态变化，
+  而同一轮会被问多次（门注入后宿主再跑一步，轮末再问一次）。回放旧判定会让"已声明"永远看不到，
+  注入无限重复；且短路发生在 dispatch 之前，连留痕都不会写——实测表现为每轮收到同一条 `attempt 1` 提醒、
+  留痕文件零新增。
 
 ## 连接生命周期
 

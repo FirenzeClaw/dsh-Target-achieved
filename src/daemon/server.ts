@@ -24,7 +24,17 @@ export type HandleResult =
   | { ok: true; data: unknown }
   | { ok: false; code: string; message: string }
 
-/** 幂等缓存：键为 `sessionId:turn:type`，值为首次成功的结果。 */
+/**
+ * 幂等缓存：键为 `sessionId:turn:type`，值为首次成功的结果。
+ *
+ * 只缓存**有副作用且重复无意义**的请求（换轮、声明、收尾清理、断开）。
+ * 判定类请求（`turn-stopping` / `upstream-error` / `resume-confirm`）绝不能进缓存：
+ * 它们的答案随状态变化，而同一轮会被问多次——门注入后宿主再跑一步，轮末又会
+ * 问一次。缓存回放会让"已声明"永远看不到，注入无限重复，且短路发生在 dispatch
+ * 之前，连留痕都不会写（实测表现为每轮都收到同一条 `attempt 1` 提醒、留痕为零）。
+ */
+const CACHED_TYPES = new Set<RequestMessage['type']>(['turn-start', 'declare', 'finish', 'dispose'])
+
 const results = new Map<string, unknown>()
 
 /**
@@ -49,12 +59,17 @@ function causeOf(kind: string | undefined): StopCause {
  * @returns 分发结果
  */
 export function handleRequest(deps: ServerDeps, request: RequestMessage): HandleResult {
+  const cacheable = CACHED_TYPES.has(request.type)
   const key = `${request.sessionId}:${request.turn}:${request.type}`
-  const cached = results.get(key)
-  if (cached !== undefined) return { ok: true, data: cached }
+  if (cacheable) {
+    const cached = results.get(key)
+    if (cached !== undefined) return { ok: true, data: cached }
+  }
 
   const now = deps.now()
   const data = dispatch(deps, request, now)
+
+  if (!cacheable) return { ok: true, data }
 
   results.set(key, data)
   if (results.size > IDEMPOTENCY_CAPACITY) {
