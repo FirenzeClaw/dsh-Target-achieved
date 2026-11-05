@@ -89,6 +89,28 @@ export function takeReminderDue(agent: Agent, threshold: number): boolean {
 }
 
 /**
+ * 读取当前累计的遗忘次数（不消费）。
+ *
+ * 判定改成「先读后决定、注入时才清」之后，需要在不改变状态的前提下取值——
+ * `takeReminderDue` 会顺手清零，用它在判定前探测会把计数弄丢。
+ * @param agent - 目标 agent
+ * @returns 已累计的遗忘次数
+ */
+export function forgetCountOf(agent: Agent): number {
+  return stateOf(agent).count
+}
+
+/**
+ * 清零遗忘计数。
+ *
+ * 只在**确实发出**了带复述的注入之后调用（见 `src/gate.ts`）。
+ * @param agent - 目标 agent
+ */
+export function resetForgetCount(agent: Agent): void {
+  stateOf(agent).count = 0
+}
+
+/**
  * 清理该 agent 的计数；agent 结束时调用。
  * @param agent - 已结束的 agent
  */

@@ -4,12 +4,16 @@
  * 判定只依赖显式声明（TurnLatch），**不解析助手文本**（FR-014）。
  * 注入必须排在队首（FR-017）：宿主的收尾钩子仅在 nextStep 为空时派发，
  * 正常路径下 steer 追加即为队首；若进入时队列非空（竞态），改用 prepend。
+ *
+ * 判定本身在 `monitor/plan.ts` 里以纯函数实现，本模块只负责把计划落成副作用
+ * （改状态、投递、留痕），因此守护进程可以复用同一份判定。
  * @module
  */
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { classify, finishOf } from './cause.ts'
 import type { TargetMonitorConfig } from './config.ts'
-import { noteInjection, takeReminderDue } from './forget.ts'
+import { forgetCountOf, noteInjection, resetForgetCount } from './forget.ts'
+import { planTurnStopping } from './monitor/plan.ts'
 import { noticeSummary } from './notices.ts'
 import { REMINDER_TEXT, repairText, stallNoticeText } from './prompt.ts'
 import { bumpRepair, isDeclared, latchOf, markNoticeShown } from './state.ts'
@@ -45,41 +49,47 @@ export function handleTurnStopping(deps: GateDeps, agent: Agent, turn: number): 
   }
 
   const config = deps.config()
-  if (!config.enabled) return released('disabled')
-
-  if (!deps.isRoot(agent)) return released('not-root')
-
   const finish = finishOf(agent, turn)
   const cause = classify(finish)
-  // 取消/错误不该走到这里；真走到了也绝不复活。
-  if (cause === 'not-applicable') {
-    return released(finish?.kind === 'aborted' ? 'aborted' : 'error')
+  const latch = latchOf(agent, turn)
+
+  const plan = planTurnStopping({
+    enabled: config.enabled,
+    isRoot: deps.isRoot(agent),
+    cause,
+    declared: isDeclared(agent, turn),
+    repairs: latch.repairs,
+    noticeShown: latch.noticeShown,
+    forgetCount: forgetCountOf(agent),
+    config,
+  })
+
+  if (!plan.inject) {
+    // 取消与错误在留痕里要分开：这是事后区分「用户叫停」与「上游炸了」的唯一依据，
+    // 而纯函数那一层把它们统一成了 not-applicable。
+    const reason = plan.reason === 'error' && finish?.kind === 'aborted' ? 'aborted' : plan.reason
+    return released(reason)
   }
 
-  if (isDeclared(agent, turn)) return released('declared')
-
   const now = deps.now?.() ?? Date.now()
+  // 走到这里说明一定不是 not-applicable（那一支已被 plan 判成放行），
+  // 这里显式收窄类型，避免把三态原因传进只接受两态的文案函数。
+  const repairCause = plan.cause === 'truncated' ? 'truncated' : 'undeclared'
   // 先登记本次注入：下一次声明若落在反应窗口内，就会被计为一次"遗忘"。
   noteInjection(agent, now)
 
-  const attempt = bumpRepair(agent, turn)
-  const repair = repairText(cause, attempt)
-
-  // 阈值提示与修复提醒合并成一条消息：若分两条投递，第二条会被"队列非空则 prepend"
-  // 的策略顶到队首，用户提示反而排在修复提示之前——顺序颠倒。
-  const latch = latchOf(agent, turn)
-  const needsStallNotice = !latch.noticeShown && attempt >= config.stallNoticeThreshold
-  if (needsStallNotice) markNoticeShown(agent, turn)
+  bumpRepair(agent, turn)
+  if (plan.stallNotice) markNoticeShown(agent, turn)
+  // 复述只在真正发出注入的这一轮消费阈值，避免"达阈值但没发出去"导致复述丢失。
+  if (plan.reminder) resetForgetCount(agent)
 
   // 复述紧跟在修复正文之后：模型最先读到的是"你忘了声明"，再读规范原文，
   // 最后是给用户的卡住提示（若触发）。
-  const needsReminder = takeReminderDue(agent, config.reminderThreshold)
+  const parts = [repairText(repairCause, plan.attempt)]
+  if (plan.reminder) parts.push(REMINDER_TEXT)
+  if (plan.stallNotice) parts.push(stallNoticeText(config.stallNoticeThreshold))
 
-  const parts = [repair]
-  if (needsReminder) parts.push(REMINDER_TEXT)
-  if (needsStallNotice) parts.push(stallNoticeText(config.stallNoticeThreshold))
-
-  deps.deliver(agent, parts.join('\n\n'), noticeSummary(turn, cause, attempt))
-  deps.trace?.(agent, { turn, outcome: 'injected', reason: 'undeclared', attempt })
+  deps.deliver(agent, parts.join('\n\n'), noticeSummary(turn, repairCause, plan.attempt))
+  deps.trace?.(agent, { turn, outcome: 'injected', reason: 'undeclared', attempt: plan.attempt })
   return true
 }
