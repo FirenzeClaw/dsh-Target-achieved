@@ -27,6 +27,7 @@ DSH-Target-achieved/
 │   ├── config.ts              # 配置校验（非法值抛出）
 │   ├── state.ts               # (agent, turn) → 目标状态
 │   ├── forget.ts              # 跨轮遗忘计数（复述触发）
+│   ├── resume.ts              # 上游错误分类与连续续行计数
 │   ├── trace.ts               # 判定留痕（JSONL + 环形缓冲）
 │   ├── cause.ts               # FinishReason → StopCause
 │   ├── gate.ts                # 收尾门判定与注入策略
@@ -44,7 +45,8 @@ DSH-Target-achieved/
 │   ├── 001-target-monitor/    # 收尾门特性：spec / plan / tasks / contracts
 │   ├── 002-turn-key-alignment/ # 轮次键对齐：声明与判定共用同一轮次
 │   ├── 004-observability-and-packaging/  # 留痕 / 设置页 / 可分发
-│   └── 005-declaration-reminder/         # 声明规范复述
+│   ├── 005-declaration-reminder/         # 声明规范复述
+│   └── 006-upstream-resume/              # 上游异常自动续行
 ├── .specify/                  # speckit 脚手架
 │   └── memory/constitution.md # 项目宪法（v1.1.0）
 └── .dsh/skills/               # speckit-* 技能
@@ -62,9 +64,9 @@ DSH-Target-achieved/
 - 测试：`npm test` → `node --test`（Node 24 原生类型剥离，零测试框架依赖）
 - 挂载：profile 的 `cordis.patch.yml` `insert` 条目，或 `dsh plugin --profile web add <包名>`
 
-**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 98 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
+**当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 128 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。**阈值提示（第 5 次未声明）仍未验证** -- 见 `specs/001-target-monitor/quickstart.md`。
 
-**版本**：`0.1.0`（首个正式发布，tag `v0.1.0`）。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
+**版本**：`0.2.0`（新增上游异常自动续行；tag `v0.2.0`）。`0.1.0` 为首个正式发布。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
 
 **发布**：npm 与 git 双通道，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`。`package.json` 含 `dsh.manifestVersion: 1` + `dsh.bundle.patch`，支持 bundle / git / 本地 link 三种安装方式。
 
@@ -172,9 +174,9 @@ README 的「覆盖边界」与「能力声明」两节是事实陈述，不是�
 3. 判定依据是宿主事件（`agent/turn-stopping`、`agent/assistant-stream`），按 `0.2.1-rc.5` 的契约实现。
 4. 用户取消轮次后不再注入，也不复活该轮；下一次用户输入恢复门控。
 5. 留痕是旁路：写盘失败时插件继续判定与注入，只告警一次。
-6. **上游断流/限流只覆盖到重试层之前。** 单次失败由宿主 `agent/request-error` 重试；重试耗尽后轮次以 `error` 结束，宿主**不派发** `agent/turn-stopping`（`dsh-agent-loop/lib/index.js:1001` 的派发在正常收尾路径内），本插件不介入。第 5 次"可能卡住"提示的触发条件是同一轮被注入 5 次仍未声明，与上游错误不是同一条路径。这是已知缺口，补法是在 `agent/error` 上挂面向用户的提示。
+6. **上游断流按错误码区别对待。** 单次失败由宿主 `agent/request-error` 重试；重试耗尽后轮次以 `error` 结束，宿主**不派发** `agent/turn-stopping`（`dsh-agent-loop/lib/index.js:1001` 在正常收尾路径内）。插件在 `agent/error` 上补轮次级恢复：可重试码（`RATE_LIMIT`/`SERVER`/`TIMEOUT`/`TRANSPORT`/`EMPTY_RESPONSE`）自动续行，默认上限 3 次、正常收尾清零；`AUTH`/`QUOTA`/`CONTEXT_WINDOW_EXCEEDED` 不续行。**取消路径不派发 `agent/error`**（`index.js:1010-1016` 命中 abort 分支直接 throw），相关判断是防御性的。
 
-**开销**（README「开销」节有实测数字）：系统提示词章节 433 字符/轮；提醒 647 字符/次；复述 306 字符，每累计 3 次遗忘出现一次。真实成本是"可能多一轮"，实测注入响应中位数约 9.6 秒。
+**开销**（README「开销」节有实测数字）：系统提示词章节 433 字符/轮；提醒 647 字符/次；复述 306 字符，每累计 3 次遗忘出现一次。上游续行的代价是**一整轮上下文重发**，因此有 3 次上限。真实成本是"可能多一轮"，实测注入响应中位数约 9.6 秒。
 
 许可为 MIT（`LICENSE` 全文）；`package.json` 的 `license` 字段、`files` 收录与 README 许可节三处必须一致。
 

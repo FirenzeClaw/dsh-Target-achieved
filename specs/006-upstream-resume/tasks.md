@@ -29,8 +29,8 @@ description: "Task list for 上游异常自动续行"
 
 **Purpose**: 建立新模块与测试文件骨架，不写业务逻辑
 
-- [ ] T001 创建 `src/resume.ts` 骨架：导出 `ResumeState` 类型与 `RETRYABLE_CODES` 常量（`['EMPTY_RESPONSE','RATE_LIMIT','SERVER','TIMEOUT','TRANSPORT']`，须与 `dsh-llm/lib/types/retry-policy.js:16-22` 逐项一致），函数体留空
-- [ ] T002 [P] 创建 `tests/unit/resume.test.ts` 与 `tests/integration/upstream-resume.test.ts` 骨架，确认 `npm test` 能发现并跳过空文件
+- [x] T001 创建 `src/resume.ts` 骨架：导出 `ResumeState` 类型与 `RETRYABLE_CODES` 常量（`['EMPTY_RESPONSE','RATE_LIMIT','SERVER','TIMEOUT','TRANSPORT']`，须与 `dsh-llm/lib/types/retry-policy.js:16-22` 逐项一致），函数体留空
+- [x] T002 [P] 创建 `tests/unit/resume.test.ts` 与 `tests/integration/upstream-resume.test.ts` 骨架，确认 `npm test` 能发现并跳过空文件
 
 ---
 
@@ -42,13 +42,13 @@ description: "Task list for 上游异常自动续行"
 
 ### 测试
 
-- [ ] T003 [P] 在 `tests/unit/config.test.ts` 追加用例：`maxResumes` 接受 `0`（关闭语义）、拒绝负数；`resumeOnUpstreamError` 接受布尔、拒绝字符串；已解析路径（volatile 引用对象）同样复核；**并断言两者都是 volatile 引用对象**（`typeof value.get === 'function'`），这是设置页能自动生成表单的前提（FR-016）——先看它失败
-- [ ] T004 [P] 在 `tests/unit/trace.test.ts` 追加用例：三个新 `reason` 可写入；`errorCode` 可选（缺省时不出现该键）；既有六字段序列化结果不变——先看它失败
+- [x] T003 [P] 在 `tests/unit/config.test.ts` 追加用例：`maxResumes` 接受 `0`（关闭语义）、拒绝负数；`resumeOnUpstreamError` 接受布尔、拒绝字符串；已解析路径（volatile 引用对象）同样复核；**并断言两者都是 volatile 引用对象**（`typeof value.get === 'function'`），这是设置页能自动生成表单的前提（FR-016）——先看它失败
+- [x] T004 [P] 在 `tests/unit/trace.test.ts` 追加用例：三个新 `reason` 可写入；`errorCode` 可选（缺省时不出现该键）；既有六字段序列化结果不变——先看它失败
 
 ### 实现
 
-- [ ] T005 在 `src/config.ts` 新增 `resumeOnUpstreamError`（`boolean`，默认 `true`）与 `maxResumes`（正整数，默认 `3`），二者均 `.volatile()`；`snapshot()` 带上二者；原始路径与已解析路径都做校验（`maxResumes >= 0`，负数抛错）
-- [ ] T006 [P] 在 `src/trace.ts` 的 `GateReason` 追加 `'upstream-resumed' | 'upstream-skipped' | 'upstream-capped'`；`GateTraceEntry` 与 `TraceInput` 增加可选 `errorCode?: string`，序列化时缺省不写该键
+- [x] T005 在 `src/config.ts` 新增 `resumeOnUpstreamError`（`boolean`，默认 `true`）与 `maxResumes`（正整数，默认 `3`），二者均 `.volatile()`；`snapshot()` 带上二者；原始路径与已解析路径都做校验（`maxResumes >= 0`，负数抛错）
+- [x] T006 [P] 在 `src/trace.ts` 的 `GateReason` 追加 `'upstream-resumed' | 'upstream-skipped' | 'upstream-capped'`；`GateTraceEntry` 与 `TraceInput` 增加可选 `errorCode?: string`，序列化时缺省不写该键
 
 **Checkpoint**: `npm test` 中 T003/T004 由红转绿，其余既有用例不受影响
 
@@ -62,18 +62,18 @@ description: "Task list for 上游异常自动续行"
 
 ### 测试
 
-- [ ] T007 [US1] 在 `tests/unit/resume.test.ts` 写分类矩阵：5 个可重试码逐个返回可续行；`AUTH` / `QUOTA` / `ACCOUNT_QUOTA` / `CONTEXT_WINDOW_EXCEEDED` / `UNKNOWN` 逐个不可续行；非 `LlmError`（普通 `Error`、`AggregateError`）不可续行——先看它失败
-- [ ] T008 [P] [US1] 在 `tests/unit/resume.test.ts` 写计数语义：首次 `noteResume` 后 `consecutive === 1`；同轮重复 `agent/error` 不累加；`resetResume` 归零——先看它失败
-- [ ] T009 [US1] 在 `tests/integration/upstream-resume.test.ts` 驱动真实 `apply`：假 ctx 捕获 `agent/error` 监听器，假 agent 提供 `whenIdle()`（立即兑现）与 `steer`，断言 `steer` 收到 1 条消息、正文 `=== repairText('undeclared', 1)`、`createNotice` 的来源标记存在、同步阶段（`whenIdle` 之前）未发生投递——先看它失败
-- [ ] T010 [US1] 在 `tests/integration/upstream-resume.test.ts` 追加：模拟一帧正常 `finish`（`stop`）后 `consecutive === 0`；模拟 `error` 帧则不清零（FR-011）——先看它失败
+- [x] T007 [US1] 在 `tests/unit/resume.test.ts` 写分类矩阵：5 个可重试码逐个返回可续行；`AUTH` / `QUOTA` / `ACCOUNT_QUOTA` / `CONTEXT_WINDOW_EXCEEDED` / `UNKNOWN` 逐个不可续行；非 `LlmError`（普通 `Error`、`AggregateError`）不可续行——先看它失败
+- [x] T008 [P] [US1] 在 `tests/unit/resume.test.ts` 写计数语义：首次 `noteResume` 后 `consecutive === 1`；同轮重复 `agent/error` 不累加；`resetResume` 归零——先看它失败
+- [x] T009 [US1] 在 `tests/integration/upstream-resume.test.ts` 驱动真实 `apply`：假 ctx 捕获 `agent/error` 监听器，假 agent 提供 `whenIdle()`（立即兑现）与 `steer`，断言 `steer` 收到 1 条消息、正文 `=== repairText('undeclared', 1)`、`createNotice` 的来源标记存在、同步阶段（`whenIdle` 之前）未发生投递——先看它失败
+- [x] T010 [US1] 在 `tests/integration/upstream-resume.test.ts` 追加：模拟一帧正常 `finish`（`stop`）后 `consecutive === 0`；模拟 `error` 帧则不清零（FR-011）——先看它失败
 
 ### 实现
 
-- [ ] T011 [US1] 在 `src/resume.ts` 实现 `classifyUpstreamError(error: unknown): 'retryable' | 'non-retryable'`：用 `instanceof LlmError` + `RETRYABLE_CODES.has(error.code)`，不解析 message（C-002）
-- [ ] T012 [US1] 在 `src/resume.ts` 实现 `noteResume(agent, turn)` / `resetResume(agent)` / `forgetResume(agent)`，用 `WeakMap<Agent, ResumeState>`；`noteResume` 同轮幂等（`lastTurn === turn` 时不动）
-- [ ] T013 [US1] 在 `src/index.ts` 注册 `ctx.on('agent/error', ...)`：分类 → `noteResume` → `agent.whenIdle().then(...)`；兑现后复核前置条件再 `agent.steer(createNotice(repairText('undeclared', 1), summary))`（C-004 / C-005 / C-006）
-- [ ] T014 [US1] 在 `src/index.ts` 的 `agent/assistant-stream` finish 帧分支调用 `resetResume(agent)`（C-007）
-- [ ] T015 [US1] 反向验证：临时把 `whenIdle()` 换成同步投递，确认 T009 至少一条用例失败，随后还原并记录结果
+- [x] T011 [US1] 在 `src/resume.ts` 实现 `classifyUpstreamError(error: unknown): 'retryable' | 'non-retryable'`：用 `instanceof LlmError` + `RETRYABLE_CODES.has(error.code)`，不解析 message（C-002）
+- [x] T012 [US1] 在 `src/resume.ts` 实现 `noteResume(agent, turn)` / `resetResume(agent)` / `forgetResume(agent)`，用 `WeakMap<Agent, ResumeState>`；`noteResume` 同轮幂等（`lastTurn === turn` 时不动）
+- [x] T013 [US1] 在 `src/index.ts` 注册 `ctx.on('agent/error', ...)`：分类 → `noteResume` → `agent.whenIdle().then(...)`；兑现后复核前置条件再 `agent.steer(createNotice(repairText('undeclared', 1), summary))`（C-004 / C-005 / C-006）
+- [x] T014 [US1] 在 `src/index.ts` 的 `agent/assistant-stream` finish 帧分支调用 `resetResume(agent)`（C-007）
+- [x] T015 [US1] 反向验证：临时把 `whenIdle()` 换成同步投递，确认 T009 至少一条用例失败，随后还原并记录结果
 
 **Checkpoint**: T007–T010 全绿；MVP 可用
 
@@ -87,15 +87,15 @@ description: "Task list for 上游异常自动续行"
 
 ### 测试
 
-- [ ] T016 [P] [US2] 在 `tests/integration/upstream-resume.test.ts` 追加：`AUTH` / `QUOTA` / `CONTEXT_WINDOW_EXCEEDED` 时 `steer` 不被调用；`enabled: false` 与 `resumeOnUpstreamError: false` 时同样不调用；非 root agent 不调用——先看它失败
-- [ ] T017 [P] [US2] 在 `tests/unit/resume.test.ts` 追加 `shouldResume` 的前置条件矩阵（六项逐项为假时返回 false 并给出跳过原因）。**取消一项按防御性编写**：直接调用判定函数，不伪装成端到端（取消路径不派发 `agent/error`，见 spec FR-005 实现说明）
-- [ ] T018 [US2] 在 `tests/integration/upstream-resume.test.ts` 追加异常隔离用例：让 `whenIdle()` 返回一个 reject 的 Promise、再让 `steer` 抛错，断言两处异常都被吞掉、`agent/error` 的后续传播不受影响（FR-017 / C-009）——先看它失败
+- [x] T016 [P] [US2] 在 `tests/integration/upstream-resume.test.ts` 追加：`AUTH` / `QUOTA` / `CONTEXT_WINDOW_EXCEEDED` 时 `steer` 不被调用；`enabled: false` 与 `resumeOnUpstreamError: false` 时同样不调用；非 root agent 不调用——先看它失败
+- [x] T017 [P] [US2] 在 `tests/unit/resume.test.ts` 追加 `shouldResume` 的前置条件矩阵（六项逐项为假时返回 false 并给出跳过原因）。**取消一项按防御性编写**：直接调用判定函数，不伪装成端到端（取消路径不派发 `agent/error`，见 spec FR-005 实现说明）
+- [x] T018 [US2] 在 `tests/integration/upstream-resume.test.ts` 追加异常隔离用例：让 `whenIdle()` 返回一个 reject 的 Promise、再让 `steer` 抛错，断言两处异常都被吞掉、`agent/error` 的后续传播不受影响（FR-017 / C-009）——先看它失败
 
 ### 实现
 
-- [ ] T019 [US2] 在 `src/resume.ts` 实现 `shouldResume(agent, turn, config, isRoot): { resume: true } | { resume: false; reason: 'upstream-skipped' | 'upstream-capped' }`，覆盖 C-003 六项前置条件
-- [ ] T020 [US2] 在 `src/index.ts` 的监听器与 `whenIdle` 回调中都用 `shouldResume` 复核，跳过时写留痕 `upstream-skipped`
-- [ ] T021 [US2] 在 `src/index.ts` 的监听器入口与 `whenIdle` 回调内各加一层 `try/catch`，就地 `console.warn`（带轮次与错误码），确保任何异常都不外溢（FR-017）
+- [x] T019 [US2] 在 `src/resume.ts` 实现 `shouldResume(agent, turn, config, isRoot): { resume: true } | { resume: false; reason: 'upstream-skipped' | 'upstream-capped' }`，覆盖 C-003 六项前置条件
+- [x] T020 [US2] 在 `src/index.ts` 的监听器与 `whenIdle` 回调中都用 `shouldResume` 复核，跳过时写留痕 `upstream-skipped`
+- [x] T021 [US2] 在 `src/index.ts` 的监听器入口与 `whenIdle` 回调内各加一层 `try/catch`，就地 `console.warn`（带轮次与错误码），确保任何异常都不外溢（FR-017）
 
 **Checkpoint**: T016/T017/T018 全绿；US1 仍独立可用
 
@@ -109,15 +109,15 @@ description: "Task list for 上游异常自动续行"
 
 ### 测试
 
-- [ ] T022 [P] [US3] 在 `tests/integration/upstream-resume.test.ts` 追加：4 次连续 `RATE_LIMIT` → 投递 3 次；第 4 次不投递且留痕 reason 为 `upstream-capped`。**每次必须使用递增的 turn 号（1→4）**，否则会被 T012 的同轮幂等挡住、测试会假失败——先看它失败
-- [ ] T023 [P] [US3] 在 `tests/unit/trace.test.ts` 追加：`upstream-resumed` 记录带 `errorCode`；`upstream-capped` 记录带 `errorCode`；用等价于 `jq` 的过滤（按 `outcome` / 既有 `reason`）时新记录不被误命中
-- [ ] T024 [US3] 在 `tests/unit/resume.test.ts` 追加 dispose 用例：`forgetResume(agent)` 后 `consecutive` 归零、条目被删除；随后 `shouldResume` 返回可续行（证明没有残留脏状态）（FR-018）——先看它失败
+- [x] T022 [P] [US3] 在 `tests/integration/upstream-resume.test.ts` 追加：4 次连续 `RATE_LIMIT` → 投递 3 次；第 4 次不投递且留痕 reason 为 `upstream-capped`。**每次必须使用递增的 turn 号（1→4）**，否则会被 T012 的同轮幂等挡住、测试会假失败——先看它失败
+- [x] T023 [P] [US3] 在 `tests/unit/trace.test.ts` 追加：`upstream-resumed` 记录带 `errorCode`；`upstream-capped` 记录带 `errorCode`；用等价于 `jq` 的过滤（按 `outcome` / 既有 `reason`）时新记录不被误命中
+- [x] T024 [US3] 在 `tests/unit/resume.test.ts` 追加 dispose 用例：`forgetResume(agent)` 后 `consecutive` 归零、条目被删除；随后 `shouldResume` 返回可续行（证明没有残留脏状态）（FR-018）——先看它失败
 
 ### 实现
 
-- [ ] T025 [US3] 在 `src/index.ts` 接入上限判断：`shouldResume` 返回 `upstream-capped` 时只留痕、不投递、不给用户额外提示（C-008）
-- [ ] T026 [US3] 在 `src/index.ts` 的投递路径与跳过路径统一写留痕，带上 `errorCode`（非 `LlmError` 时写 `'UNKNOWN'`）
-- [ ] T027 [US3] 在 `src/index.ts` 注册 `ctx.on('agent/disposed', ...)` → `forgetResume(agent)`，与既有 `forgetForgetful` 并列（FR-018）
+- [x] T025 [US3] 在 `src/index.ts` 接入上限判断：`shouldResume` 返回 `upstream-capped` 时只留痕、不投递、不给用户额外提示（C-008）
+- [x] T026 [US3] 在 `src/index.ts` 的投递路径与跳过路径统一写留痕，带上 `errorCode`（非 `LlmError` 时写 `'UNKNOWN'`）
+- [x] T027 [US3] 在 `src/index.ts` 注册 `ctx.on('agent/disposed', ...)` → `forgetResume(agent)`，与既有 `forgetForgetful` 并列（FR-018）
 
 **Checkpoint**: 三个故事全部独立可用
 
@@ -125,11 +125,14 @@ description: "Task list for 上游异常自动续行"
 
 ## Phase 6: Polish & 跨故事收尾
 
-- [ ] T028 [P] 在 `docs/PLUGIN-DESIGN.md` 追加「错误路径与轮次级恢复」一节，记录为何不碰 `agent/request-error`、为何用 `steer` 而非 `followup`、为何取消判断只是防御
-- [ ] T029 [P] 更新 `README.md`「覆盖边界」表：上游断流/限流从「部分覆盖」改为「已覆盖：重试耗尽后自动续行一轮，上限 3 次」；「开销」节补一句续行代价（一整轮上下文）；`AGENTS.md`「对外声明」第 6 条同步改写
-- [ ] T030 [P] 在 `CHANGELOG.md` 写入新增内容（自动续行、两个配置项、三个 reason、可选 errorCode）与变更（上游断流覆盖范围）
-- [ ] T031 升版本到 `0.2.0`（新特性，语义化次版本）：改 `package.json` 的 `version`、把 CHANGELOG 的 `[Unreleased]` 落成 `## [0.2.0] - <日期>`、打 annotated tag `v0.2.0`——`tests/unit/manifest.test.ts` 会校验版本必须在 CHANGELOG 中有对应条目
+- [x] T028 [P] 在 `docs/PLUGIN-DESIGN.md` 追加「错误路径与轮次级恢复」一节，记录为何不碰 `agent/request-error`、为何用 `steer` 而非 `followup`、为何取消判断只是防御
+- [x] T029 [P] 更新 `README.md`「覆盖边界」表：上游断流/限流从「部分覆盖」改为「已覆盖：重试耗尽后自动续行一轮，上限 3 次」；「开销」节补一句续行代价（一整轮上下文）；`AGENTS.md`「对外声明」第 6 条同步改写
+- [x] T030 [P] 在 `CHANGELOG.md` 写入新增内容（自动续行、两个配置项、三个 reason、可选 errorCode）与变更（上游断流覆盖范围）
+- [x] T031 升版本到 `0.2.0`（新特性，语义化次版本）：改 `package.json` 的 `version`、把 CHANGELOG 的 `[Unreleased]` 落成 `## [0.2.0] - <日期>`、打 annotated tag `v0.2.0`——`tests/unit/manifest.test.ts` 会校验版本必须在 CHANGELOG 中有对应条目
 - [ ] T032 跑 `npm run typecheck && npm test && npm run build`，并按 `quickstart.md` 第 2–4 节做真实验证；把反向验证（T015）结论写进提交正文
+
+  > **进度（2026-11-05）**：`typecheck` / `build` / `npm test`（128 项）全部通过；`dist/` 已重建，`npm pack` 预演 41 个文件、版本 0.2.0。
+  > **未完成**：quickstart 第 3 节需要**制造一次真实上游失败**（改 provider base URL 或注入 429），会中断当前会话，留待用户在网络抖动时观察，或单独开一次临时实例验证。本节不勾选。
 
 ---
 

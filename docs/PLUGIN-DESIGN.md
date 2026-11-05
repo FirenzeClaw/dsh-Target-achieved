@@ -175,3 +175,33 @@ README 面向使用者，必须说清"保证什么、不保证什么"。这一�
 **为什么系统提示词章节要节流**：章节 433 字符随系统提示词每轮发送。它必须常驻——声明协议若只在需要时注入，模型就无从知道该调用什么。但复述（306 字符）不能常驻，否则等于把章节发两遍；因此按累计遗忘次数节流，每 3 次才出现一次。
 
 **为什么注入文案用常量**：拼接轮次、阈值之类的运行时数据会扩大提示注入面，而对模型没有信息价值。这一条与原则 III 一致，不是省事。
+
+## 9. 错误路径与轮次级恢复（2026-11-05，spec 006）
+
+收尾门只能管正常收尾：`agent/turn-stopping` 在正常路径派发（`dsh-agent-loop/lib/index.js:1001`），
+错误路径走 `catch → throwError → agent/error`，根本不进这个钩子。于是上游抖动在重试耗尽后
+会让任务停在半路，没有任何自动补救。006 补的就是这一段「重试之后、轮次结束之时」。
+
+**为什么不碰 `agent/request-error`**：那是 `dsh-llm-retry` 的地盘（`dsh-llm-retry/lib/index.js:175`），
+它按 provider 的 `retryPolicy` 做退避重试。再挂一个监听器要么和它抢时序，要么把退避逻辑
+复制一遍——后者是原则 VII 明确禁止的重复实现。两者回答的是不同问题：它管「单次请求要不要重试」，
+本插件管「重试层放弃后还值不值得再给一轮」。
+
+**为什么必须等 `whenIdle`**：`agent/error` 派发时轮次仍是 `running`，此刻 `send` 里
+`wakingAfterAbort` 为假、`wakeDriver` 也不置 `wakeRequested`（`dsh-agent-loop/lib/index.js:854-860`），
+投递的消息只会躺在队列里等下次用户输入。这条写错时的表现极具迷惑性：监听器确实执行了、
+`steer` 确实返回了、日志里什么异常都没有——只是永远不生效。
+
+**为什么用 `steer` 而不是 `followup`**：`followup` 走 `splice("next-turn", Infinity, ...)`，
+`Infinity` 被钳到数组长度，落在**队尾**；`steer` 进 `next-step`，而 `claim()` 先取完全部
+`next-step` 再取一条 `next-turn`（`dsh-agent-loop/lib/index.js:103-108`），所以同批排队任务里
+续行提醒排在最前。产品要求是「注入优先于排队任务」，这是唯一满足它的路径。
+
+**为什么取消判断是防御性的**：取消路径命中 `abortedCancelCause` 后直接 `throw`，
+不调用 `throwError`，所以 `agent/error` 根本不会发出（`dsh-agent-loop/lib/index.js:1010-1016`）。
+插件仍保留判断，但它防的是未来宿主改动，不是当前链路——相关测试只能写成防御性单测，
+不能声称端到端覆盖。
+
+**计数为什么分成两个函数**：`claimResumeTurn` 在决定投递前占轮次，`noteResume` 只在真正
+`steer` 之后加一。合成一个的话，要么同一轮触发多次 `agent/error` 时投递两次，
+要么被上限挡下的判断也被计入次数——两种都会让上限失真。

@@ -1,6 +1,6 @@
 {
   "name": "dsh-target-monitor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DeepSeek-Harness 收尾门：任务未声明完成时自动注入自救提醒，避免静默中断",
   "type": "module",
   "license": "MIT",

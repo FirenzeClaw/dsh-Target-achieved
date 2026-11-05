@@ -7,10 +7,27 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-05
+
+### Added
+
+- **上游异常自动续行**（spec 006）：监听 `agent/error`，对可重试错误码（`RATE_LIMIT` / `SERVER` / `TIMEOUT` / `TRANSPORT` / `EMPTY_RESPONSE`，与宿主默认白名单一致）在轮次真正 idle 之后投递一条自救提醒，自动开启新一轮。此前上游抖动的重试耗尽后，任务会停在半路且没有任何补救——因为 `agent/turn-stopping` 只在正常收尾路径派发。
+- **两个 volatile 配置项**：`resumeOnUpstreamError`（默认 `true`）与 `maxResumes`（默认 `3`，`0` 等价于关闭）。二者在设置页可见，改动即时生效。
+- **三类新留痕**：`upstream-resumed` / `upstream-skipped` / `upstream-capped`，并新增可选字段 `errorCode`。`outcome` 仍只有 `injected` / `released` 两值，既有 `jq` 查询无需修改。
+
 ### Changed
 
 - 定位重述：本项目治理的是**实际使用中的任务中断**，而不是单一的"模型以为说完了"。思考泄露、工具调用畸形、模型自认完成在本插件眼里是同一件事——轮次在没有任何目标状态声明的情况下结束。README 的「背景」与「覆盖边界」按此重写。
-- 明确记录上游断流/限流的覆盖边界：单次失败由宿主 `agent/request-error` 重试，重试耗尽后轮次以 `error` 结束且宿主不派发 `agent/turn-stopping`，插件当前不介入这一类结束。
+- 上游断流/限流从「部分覆盖」改为「已覆盖（重试层之后）」：单次失败仍由宿主 `agent/request-error` 重试，插件只在重试耗尽后补一次轮次级恢复，不重复实现退避策略。
+
+### Fixed
+
+- 无。
+
+### Notes
+
+- 续行的代价是一整轮上下文重发，因此默认上限为 3 次；正常收尾（`stop` / `tool-calls` / `max-tokens`）即清零。
+- 取消路径不会触发 `agent/error`（宿主的 catch 命中 abort 分支后直接抛出），因此「取消不续行」是防御性约束，相关测试为单元级防御断言。
 
 ## [0.1.0] - 2026-11-05
 
