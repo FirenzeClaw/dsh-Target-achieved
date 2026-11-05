@@ -135,7 +135,7 @@ jq -c 'select(.turn == 7)' ~/.dsh/logs/target-monitor/gate-trace.jsonl
 
 **已在真实会话中验证**：三种状态（未声明 → 注入；声明 `done` → 不注入；声明 `awaiting_user` → 不注入）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。
 
-测试 95 项全通过，`typecheck` 与 `build` 均通过。005（复述）与 004 的留痕、设置页、打包元数据已实现；004 的市场清单发布流程待定。
+测试 97 项全通过，`typecheck` 与 `build` 均通过。005（复述）与 004 的留痕、设置页、打包元数据已实现；004 的市场清单发布流程待定。
 
 ## 文档
 
@@ -152,10 +152,11 @@ jq -c 'select(.turn == 7)' ~/.dsh/logs/target-monitor/gate-trace.jsonl
 ## 目录
 
 ```
-src/                    插件实现（入口 / 状态 / 判定 / 工具 / 文案 / 来源）
+src/                    插件实现（入口 / 配置 / 状态 / 判定 / 工具 / 文案 / 计数 / 留痕）
 tests/                  单元与集成测试（node --test）
 scripts/link-host.sh    开发期链接宿主包
 docs/ specs/ .specify/  设计、规格与 speckit 脚手架
+dsh.bundle.patch        bundle 补丁：安装器据此把插件写进 profile
 ```
 
 ## 许可
