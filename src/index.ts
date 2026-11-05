@@ -10,6 +10,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { forgetCause, recordFinish } from './cause.ts'
+import { forgetForgetful, noteDeclaration } from './forget.ts'
 import { Config, resolveConfig, snapshot, type TargetMonitorConfig } from './config.ts'
 import { createNotice } from './notices.ts'
 import { DECLARATION_SECTION } from './prompt.ts'
@@ -60,7 +61,13 @@ export function apply(ctx: Context, rawConfig: unknown): void {
     text: DECLARATION_SECTION,
   })
 
-  registerTargetStatus(ctx, turnOf, () => config.enabled.get() !== false)
+  registerTargetStatus(
+    ctx,
+    turnOf,
+    () => config.enabled.get() !== false,
+    // 声明时刻与反应窗口现读：窗口可在设置页调整，捕获快照会让改动失效。
+    (agent) => noteDeclaration(agent, Date.now(), config.reactionWindowMs.get()),
+  )
 
   const gate: GateDeps = {
     // config 作为访问器传入：每次判定都读当前值，而不是 apply 时的快照。
@@ -121,5 +128,6 @@ export function apply(ctx: Context, rawConfig: unknown): void {
     forget(payload.agent)
     forgetCause(payload.agent)
     forgetTurn(payload.agent)
+    forgetForgetful(payload.agent)
   })
 }

@@ -9,8 +9,9 @@
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { classify, finishOf } from './cause.ts'
 import type { TargetMonitorConfig } from './config.ts'
+import { noteInjection, takeReminderDue } from './forget.ts'
 import { noticeSummary } from './notices.ts'
-import { repairText, stallNoticeText } from './prompt.ts'
+import { REMINDER_TEXT, repairText, stallNoticeText } from './prompt.ts'
 import { bumpRepair, isDeclared, latchOf, markNoticeShown } from './state.ts'
 
 /** 门依赖的最小上下文面，便于单测替换宿主。 */
@@ -21,6 +22,8 @@ export interface GateDeps {
   isRoot(agent: Agent): boolean
   /** 投递一条提醒；由宿主实现（steer / prepend）。 */
   deliver(agent: Agent, text: string, summary: string): void
+  /** 当前时刻；测试可注入固定时钟。 */
+  now?(): number
 }
 
 /**
@@ -42,6 +45,10 @@ export function handleTurnStopping(deps: GateDeps, agent: Agent, turn: number): 
 
   if (isDeclared(agent, turn)) return false
 
+  const now = deps.now?.() ?? Date.now()
+  // 先登记本次注入：下一次声明若落在反应窗口内，就会被计为一次"遗忘"。
+  noteInjection(agent, now)
+
   const attempt = bumpRepair(agent, turn)
   const repair = repairText(cause, attempt)
 
@@ -51,10 +58,14 @@ export function handleTurnStopping(deps: GateDeps, agent: Agent, turn: number): 
   const needsStallNotice = !latch.noticeShown && attempt >= config.stallNoticeThreshold
   if (needsStallNotice) markNoticeShown(agent, turn)
 
-  const text = needsStallNotice
-    ? `${repair}\n\n${stallNoticeText(config.stallNoticeThreshold)}`
-    : repair
+  // 复述紧跟在修复正文之后：模型最先读到的是"你忘了声明"，再读规范原文，
+  // 最后是给用户的卡住提示（若触发）。
+  const needsReminder = takeReminderDue(agent, config.reminderThreshold)
 
-  deps.deliver(agent, text, noticeSummary(turn, cause, attempt))
+  const parts = [repair]
+  if (needsReminder) parts.push(REMINDER_TEXT)
+  if (needsStallNotice) parts.push(stallNoticeText(config.stallNoticeThreshold))
+
+  deps.deliver(agent, parts.join('\n\n'), noticeSummary(turn, cause, attempt))
   return true
 }

@@ -23,6 +23,8 @@ function harness(overrides: Partial<TargetMonitorConfig> = {}, root = true): Har
   const config: TargetMonitorConfig = {
     enabled: true,
     stallNoticeThreshold: 5,
+    reminderThreshold: 3,
+    reactionWindowMs: 30_000,
     ...overrides,
   }
   return {
@@ -164,7 +166,7 @@ test('volatile 开关：判定时禁用即不再注入（热生效）', () => {
   let enabled = true
   const delivered: string[] = []
   const deps: GateDeps = {
-    config: () => ({ enabled, stallNoticeThreshold: 5 }),
+    config: () => ({ enabled, stallNoticeThreshold: 5, reminderThreshold: 3, reactionWindowMs: 30_000 }),
     isRoot: () => true,
     deliver: (_a, text) => { delivered.push(text) },
   }

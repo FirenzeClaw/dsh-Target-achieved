@@ -37,11 +37,13 @@ function isDeclarable(state: unknown): state is Exclude<TargetState, 'working'> 
  * @param ctx - 插件上下文
  * @param turnOf - 读取该 agent 当前轮次号；尚未观察到轮次时返回 undefined
  * @param isEnabled - 设置页开关的实时读取
+ * @param onDeclared - 声明成功后的回调，用于遗忘计数
  */
 export function registerTargetStatus(
   ctx: Context,
   turnOf: (agent: Agent) => number | undefined,
   isEnabled: () => boolean,
+  onDeclared: (agent: Agent) => void,
 ): void {
   ctx.tools.register(defineTool({
     name: 'target_status',
@@ -82,6 +84,8 @@ export function registerTargetStatus(
         throw new Error('TARGET_STATUS_NO_TURN: no turn has been observed yet; retry after the next step starts.')
       }
       declare(agent, turn, args.state)
+      // 只有真正写进状态表的声明才算数：被拒的调用（关闭、非顶层、无轮次）不推进计数。
+      onDeclared(agent)
       // 轮次只用于内部对齐，不回给模型：模型既不需要也不该依赖它，
       // 暴露出去反而会诱导它推理轮次编号（spec 002 修订）。
       return Promise.resolve({ ok: true, state: args.state })

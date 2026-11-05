@@ -58,6 +58,20 @@ export function repairText(reason: RepairReason, attempt: number): string {
 }
 
 /**
+ * 周期性复述的声明规范。
+ *
+ * 与 {@link DECLARATION_SECTION} 语义一致、措辞不同：章节是首次教学，这里是
+ * "你已经忘了 N 次"之后的重申。必须是纯常量——拼接计数或轮次会引入可变内容，
+ * 既没有信息价值，又扩大了提示注入面（FR-016）。
+ */
+export const REMINDER_TEXT = [
+  'Reminder — the turn-closing rule:',
+  '1. When the task is complete, call target_status("done") FIRST, then report the result.',
+  '2. When you need a user decision, call target_status("awaiting_user") FIRST, then ask.',
+  'Closing without declaring makes the harness treat the turn as unfinished and ask you to continue.',
+].join('\n')
+
+/**
  * 面向用户的卡住提示。与模型提醒同批投递，但不要求模型做事。
  * @param threshold - 触发阈值
  */

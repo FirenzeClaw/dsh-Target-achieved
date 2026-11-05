@@ -81,7 +81,7 @@ function harness(roots: Agent[]): Harness {
     agents: { roots: () => roots },
   } as unknown as Context
 
-  apply(ctx, { enabled: true, stallNoticeThreshold: 5 })
+  apply(ctx, { enabled: true, stallNoticeThreshold: 5, reminderThreshold: 3, reactionWindowMs: 30_000 })
 
   return {
     startFrame(agent, turn) {

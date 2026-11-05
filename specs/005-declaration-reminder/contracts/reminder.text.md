@@ -13,7 +13,7 @@ Close without declaring and the harness will treat the turn as unfinished and as
 
 ## 插入位置
 
-追加在既有 `repairText(...)` 之后、`(attempt N in this turn)` 之前，用空行分隔：
+追加在既有 `repairText(...)` 之后（即 `(attempt N in this turn)` 之后）、卡住提示之前，用空行分隔：
 
 ```text
 [target-monitor] Automated self-recovery notice — NOT a user message.
@@ -24,9 +24,10 @@ Reminder — the turn-closing rule:
 1. ...
 2. ...
 Close without declaring and the harness will treat the turn as unfinished and ask you to continue.
-
-(attempt 4 in this turn)
 ```
+
+> 实现说明：`(attempt N)` 属于 `repairText` 的固定尾行。为了不改动既有文案结构，
+> 复述整段追加在其后，成为注入正文的倒数第二段（若同时触发卡住提示，则卡住提示在最后）。
 
 ## 约束
 
