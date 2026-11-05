@@ -126,6 +126,7 @@ interface GateTrace {
   ```
 - `dsh.bundle.patch` 声明插件挂载点（与 profile 的 `cordis.patch.yml` 同格式）。
 - Peer 依赖保持现状（FR-015）：宿主包全部 `peerDependencies`。
+- 发布通道：**npm 与 git 双通道**，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`；两通道版本号必须一致，git 源的 `commit` 取该版本 tag 指向的提交。
 
 ### 关键取舍
 

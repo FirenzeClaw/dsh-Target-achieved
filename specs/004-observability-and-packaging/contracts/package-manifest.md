@@ -8,6 +8,11 @@
 {
   "name": "dsh-target-monitor",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/FirenzeClaw/dsh-Target-achieved.git"
+  },
+  "homepage": "https://github.com/FirenzeClaw/dsh-Target-achieved",
   "engines": { "dsh": ">=0.2.1-rc.5 <0.3.0" },
   "dsh": {
     "manifestVersion": 1,
@@ -59,6 +64,7 @@
 |---|---|
 | `name` | `package.json.name` |
 | `title` / `description` / `icon` | 发布时提供 |
+| `repository` / `homepage` | `package.json.repository.url` / `homepage` |
 | `versions[].version` | `package.json.version` |
 | `versions[].engines.dsh` | `package.json.engines.dsh` |
 | `versions[].source` | `npm` 或 `git` + `commit`（40 位十六进制） |
@@ -67,6 +73,17 @@
 |---|---|
 | P-010 | 版本号变更必须同时更新 `engines.dsh`（若宿主契约变化） |
 | P-011 | 发布到 git 源时 `commit` 必须是 40 位十六进制完整哈希 |
+
+## 发布通道（双通道，均发布）
+
+用户已决定 **npm 与 git 同时发布**，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`。
+
+| 编号 | 约定 |
+|---|---|
+| P-012 | npm 与 git 的 `version` 必须一致；同一版本不得只在单通道可见 |
+| P-013 | git 源的 `commit` 必须是该版本 tag 指向的提交，不得用分支 HEAD 代替 |
+| P-014 | 发布前 `git push --follow-tags`；tag 名与 `version` 相同（不带 `v` 前缀时的市场兼容性由索引侧处理，本项目统一用 `v` 前缀） |
+| P-015 | 任一通道发布失败时，另一通道保留但市场条目标注该版本只在单通道可用 |
 
 ## 与设置页的契约交汇
 

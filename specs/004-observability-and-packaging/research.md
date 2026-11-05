@@ -69,3 +69,15 @@
 ## 决策 8：不改变判定语义
 
 `trace.ts` 是纯旁路。`gate.ts` 的每个 return 前加一次 `recordTrace`，不参与任何条件判断。FR-016 由"既有 55 个测试全部不改"来保证。
+
+## 决策 9：双通道发布
+
+**Decision**: npm 与 git 同时发布，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`（用户 2026-11-05 决定）。
+
+**Rationale**: 市场清单 format 1 的 `MarketVersion.source` 只区分 `npm` 与 `git` 二选一，但两条通道可以各自带一个版本条目。同时发布让用户既能 `npm i` 也能 `dsh plugin add <git url>`；代价是发布流程要保证版本号与 commit 一一对应。
+
+**Alternatives considered**:
+- 只发 npm —— git 用户无法从源码装。放弃。
+- 只发 git —— 无法享受 npm 的版本解析与缓存。放弃。
+
+**代价**：每次发布要同时做 `npm publish` 与 `git push --follow-tags`，且 git 源的 `commit` 必须是 tag 指向的提交而不是分支 HEAD——否则同一版本号在某些时刻会指向不同代码。
