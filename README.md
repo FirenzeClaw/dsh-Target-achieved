@@ -286,9 +286,11 @@ npm 与 git 两条通道同时发布，同一版本号在两处指向同一份�
 
 ```bash
 npm version <patch|minor|major>   # 同步 package.json 与 tag
-npm publish
+npm publish                       # 需要带 bypass 2FA 的细粒度 token
 git push --follow-tags origin master
 ```
+
+发布凭据是细粒度 access token（Write 权限 + Bypass 2FA），写进 `~/.npmrc` 的 `//registry.npmjs.org/:_authToken`。写权限 token 最长 90 天，到期需重建。`npm login` 只给两小时会话且发布时仍要求 2FA，不能用于自动发布。
 
 git 源的 `commit` 取该版本 tag 指向的提交，不使用分支 HEAD。
 
