@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: Draft
+**Status**: Implemented（v0.5 修订：FR-003/004/005 已按「只停章节」重写，见下方修订说明）
 
 **Input**: User description: 「会话初始注入可选关闭，关闭时设置页建议写入用户级 AGENTS.md，并配两个复制按钮」+ 设计评审补充「设置界面同样迁移为 web 注册方式」「全量接管，含核实写回通道」「确认，那就不修改规范」
 
@@ -32,8 +32,8 @@
 **Acceptance Scenarios**:
 
 1. **Given** `declarationSection` 为 `true`，**When** 新会话的第一轮开始，**Then** 系统提示词含规范原文，`target_status` 工具可用。
-2. **Given** `declarationSection` 为 `false`，**When** 新会话的第一轮开始，**Then** 系统提示词不含规范原文，`target_status` 工具不在工具列表中。
-3. **Given** `declarationSection` 为 `false`，**When** 一轮在未声明任何状态的情况下结束，**Then** 不注入自救提醒。
+2. **Given** `declarationSection` 为 `false`，**When** 新会话的第一轮开始，**Then** 系统提示词不含规范原文，但 `target_status` 工具仍然可用。
+3. **Given** `declarationSection` 为 `false`，**When** 一轮在未声明任何状态的情况下结束，**Then** 仍然注入自救提醒（章节关掉不影响门）。
 4. **Given** 开关为 `false` 且已有会话正在运行，**When** 用户把开关改回 `true`，**Then** 下一个新会话恢复正常注入；运行中的会话不受影响。
 
 ---
@@ -87,9 +87,9 @@
 
 - **FR-001**: 插件 MUST 提供布尔配置项 `declarationSection`，默认 `true`，且 MUST 为可运行时修改（volatile）。
 - **FR-002**: `declarationSection` 为 `false` 时，插件 MUST NOT 注册声明规范章节。
-- **FR-003**: `declarationSection` 为 `false` 时，插件 MUST NOT 注册 `target_status` 工具。
-- **FR-004**: `declarationSection` 为 `false` 时，插件 MUST NOT 执行收尾门判定与注入（没有声明通道时保留门禁只会无限催促一个无法满足的条件）。
-- **FR-005**: `declarationSection` 为 `false` 时，插件 MUST NOT 执行上游续行的投递（它与收尾门共用同一条自救通道，且依赖 `target_status` 收尾）。
+- **FR-003**: ~~`declarationSection` 为 `false` 时，插件 MUST NOT 注册 `target_status` 工具。~~ **v0.5 修订**：工具 MUST 照常注册——关掉的是首次教学，不是通道。
+- **FR-004**: ~~`declarationSection` 为 `false` 时，插件 MUST NOT 执行收尾门判定与注入。~~ **v0.5 修订**：收尾门 MUST 照常判定与注入——工具仍在，门就有可满足的条件。
+- **FR-005**: ~~`declarationSection` 为 `false` 时，插件 MUST NOT 执行上游续行的投递。~~ **v0.5 修订**：续行 MUST 照常投递，理由同 FR-004。
 - **FR-006**: 开关变化 MUST 只影响此后新建立的注册与新开始的轮次，MUST NOT 中断正在进行的轮次。
 - **FR-007**: 插件 MUST 注册一个自定义设置分区（`settings.section`，id 为 `target-monitor`），承载全部配置项。
 - **FR-008**: 该分区 MUST 展示八个字段：`enabled`、`stallNoticeThreshold`、`reminderThreshold`、`reactionWindowMs`、`resumeOnUpstreamError`、`maxResumes`、`declarationSection`、`crossProcess`。
