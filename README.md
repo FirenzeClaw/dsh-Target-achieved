@@ -6,7 +6,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933.svg)](https://nodejs.org)
 [![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.5-7c3aed.svg)](https://github.com/deepseek-ai/deepseek-harness)
 [![Tests](https://img.shields.io/badge/tests-198%20passing-brightgreen.svg)](#开发)
-[![Version](https://img.shields.io/badge/version-0.4.2-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-orange.svg)](CHANGELOG.md)
 
 ## 目录
 
@@ -78,6 +78,12 @@ dsh plugin --profile web add /path/to/DSH-Target-achieved
 安装后重启 `dsh web`：系统提示词章节与工具 schema 均在进程启动时注册。
 
 **从源码或本地目录安装**时，先执行 `npm run build`。宿主只加载已构建的客户端产物；缺少 `dist/client.js` 会导致插件激活失败，表现为设置分区无法打开、日志报缺 bundle。通过 npm 或 git 源安装无需手动构建，发布包已包含产物。
+
+包已发布到 npm，可直接引用版本号安装：
+
+```bash
+dsh plugin --profile web add dsh-target-monitor@0.5.0
+```
 
 ## 快速开始
 

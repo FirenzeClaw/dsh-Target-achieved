@@ -76,7 +76,7 @@ DSH-Target-achieved/
 
 **当前实测状态（2026-11-05）**：`typecheck` 通过、`build` 通过、`npm test` 199 项全通过。插件已在真实会话中跑通：三种状态（未声明→注入、声明 `done`→放行、声明 `awaiting_user`→放行）、轮次键对齐、注入有效性（8 次注入全部在 8–19 秒内被响应）。007 的跨进程能力用真实 socket 集成测试与手工双客户端验证（共享计数、强杀后自愈、宽限退出），**尚未在真实多入口场景长期观察**。**阈值提示（第 5 次未声明）已用守护进程真实 IPC 验证**（同一会话连续 5 次 `turn-stopping`，第 5 次返回 `stallNotice: true`）；真实聊天轮次内未复现到第 5 次，用户可见路径仍建议在真实会话中复核。
 
-**版本**：`0.4.2`（修复设置分区空白、阈值不可调、判定请求被缓存回放）。`0.2.0` 为上游异常自动续行，`0.1.0` 为首个正式发布。四个版本都已打 tag 并推送：`v0.1.0`（首个发布）、`v0.2.0`（上游续行）、`v0.3.0`（跨进程守护）、`v0.4.0`（设置界面接管）、`v0.4.1`（设置分区两处修复）、`v0.4.2`（判定请求不再走幂等缓存）。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
+**版本**：`0.5.0`（声明规范开关只停章节；设置界面按宿主语言重做）。`0.2.0` 为上游异常自动续行，`0.1.0` 为首个正式发布。七个版本都已打 tag 并推送：`v0.1.0`（首个发布）、`v0.2.0`（上游续行）、`v0.3.0`（跨进程守护）、`v0.4.0`（设置界面接管）、`v0.4.1`（设置分区两处修复）、`v0.4.2`（判定请求不再走幂等缓存）、`v0.5.0`（语义收窄 + 界面重做，**npm 首发**）。语义化版本，`0.x` 阶段事件契约调整按次版本发布；宿主主版本跃迁按主版本考虑。改动用户可见行为时同步 `CHANGELOG.md`——`tests/unit/manifest.test.ts` 会校验当前版本在 CHANGELOG 中有条目。
 
 **守护进程生命周期（2026-11-05）**：连接计数 + 宽限。客户端是**常驻连接**（`src/monitor/remote.ts` 缓存 `client`），因此"最后一个连接断开"等价于"最后一个 DSH 进程退出"。宽限 30 秒后退出并删除 socket/pid；`SIGTERM`/`SIGINT` 也清理。`--grace <ms>` 可缩短宽限，供测试与手工验证真实退出路径（`tests/integration/daemon-exit.test.ts` 用子进程验证）。
 
@@ -93,6 +93,12 @@ DSH-Target-achieved/
 **守护进程实测（2026-11-05）**：单次 RPC 0.13 毫秒（500 次平均）；空闲 RSS 51 MiB、2000 次请求后 58 MiB；socket 权限 0600、`run/` 目录 0700。这些数字写在 README「开销」与 `specs/007-daemon/plan.md`，改动实现后需重测。
 
 **发布**：npm 与 git 双通道，仓库 `git@github.com:FirenzeClaw/dsh-Target-achieved.git`。`package.json` 含 `dsh.manifestVersion: 1` + `dsh.bundle.patch`，支持 bundle / git / 本地 link 三种安装方式。
+
+> **npm 通道自 0.5.0 才真正打通**（2026-11-06）。此前 0.1.0–0.4.2 只推了 git，README 那句「两条通道同时发布」当时是错的。真实门槛：账号 2FA 为 `auth-and-writes` 时，`npm login` 给的两小时会话 token 不足以发布（报 `403 Two-factor authentication or granular access token with bypass 2fa enabled is required`），必须用带 **Bypass 2FA** 的细粒度 token，写权限最长 90 天。token 写在 `~/.npmrc` 的 `//registry.npmjs.org/:_authToken`。
+>
+> 另两个实测细节：① npm 网页勾选 React 受控 checkbox 后，`checked` 读数会滞后一拍，别只读一次就判定失败；② 细粒度 token 的「Packages and scopes」默认是 0 个包，摘要会显示「read and write access to 0 packages」，不改 All packages 就发不了。
+>
+> **时间压力**：npm 计划 2027 年 1 月移除 bypass-2FA token 的直接发布能力，届时需迁移到 trusted publishing（OIDC）。
 
 > 2026-11-05 修复两处：① `apply` 会对宿主已解析的配置重跑 `Config`，volatile 的 `enabled` 被当成布尔值校验，插件整条 entry 变 inactive（见 `src/config.ts` 的 `isVolatileRef`）；② 声明曾写到上一轮的键上（spec 002），轮次来源已统一到 `src/turn.ts`，写入点在 `assistant-stream` 的 `start` 帧。
 
