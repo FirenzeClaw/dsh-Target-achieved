@@ -141,7 +141,8 @@ export function turnStopping(input: {
 }): TurnStoppingData {
   const state = stateOf(input.sessionId, input.turn, input.now)
   const plan = planTurnStopping({
-    enabled: input.config.enabled && input.config.declarationSection,
+    // 章节开关不参与门判定：它只管系统提示词（见 src/index.ts）。
+    enabled: input.config.enabled,
     isRoot: input.isRoot,
     cause: input.cause,
     declared: state.turn.state === 'done' || state.turn.state === 'awaiting_user',
@@ -153,11 +154,8 @@ export function turnStopping(input: {
       stallNoticeThreshold: input.config.stallNoticeThreshold,
       reminderThreshold: input.config.reminderThreshold,
       reactionWindowMs: input.config.reactionWindowMs,
-      resumeOnUpstreamError: input.config.resumeOnUpstreamError,
-      maxResumes: input.config.maxResumes,
-      declarationSection: input.config.declarationSection,
-      // 守护进程只做判定，不需要知道调用方是否允许跨进程。
-      crossProcess: true,
+      // 判定只读总开关与三个阈值；续行配置属于 resume 路径，不在此传入
+      // （见 monitor/plan.ts 的 GateConfig）。
     },
   })
 
@@ -203,7 +201,7 @@ export function upstreamError(input: {
   now: number
 }): ResumeData {
   const state = stateOf(input.sessionId, input.turn, input.now)
-  if (!input.config.enabled || !input.config.declarationSection) return { resume: false, reason: 'disabled' }
+  if (!input.config.enabled) return { resume: false, reason: 'disabled' }
   if (!input.config.resumeOnUpstreamError) return { resume: false, reason: 'disabled' }
   if (input.config.maxResumes === 0) return { resume: false, reason: 'capped' }
   // 同一轮只排一次：同一轮可能触发多次 agent/error（例如落盘失败）。
@@ -224,7 +222,7 @@ export function resumeConfirm(input: {
   now: number
 }): ResumeData {
   const state = stateOf(input.sessionId, input.turn, input.now)
-  if (!input.config.enabled || !input.config.declarationSection) return { resume: false, reason: 'disabled' }
+  if (!input.config.enabled) return { resume: false, reason: 'disabled' }
   if (!input.config.resumeOnUpstreamError) return { resume: false, reason: 'disabled' }
   if (state.resumeConsecutive >= input.config.maxResumes) return { resume: false, reason: 'capped' }
 

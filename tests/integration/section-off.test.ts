@@ -1,9 +1,14 @@
 /**
- * 集成测试：关闭初始注入（spec 008 / US1）。
+ * 集成测试：关闭初始注入（spec 008 / US1，v0.5 起改为「只停章节」）。
  *
- * 关掉 `declarationSection` 不是"少一段提示词"那么简单：章节、工具、收尾门、
- * 上游续行四者共用同一个前提——模型知道 `target_status` 存在。只关章节而留着门，
- * 门会不断催促一个模型根本没有通道去满足的条件。因此本文件同时验证四件事一起停。
+ * `declarationSection` 的语义是「会话开始时要不要自动注入规范」，不是「要不要
+ * 声明通道」。关掉它对应的场景是改用 AGENTS.md 承载规范（设置分区会给出可复制的
+ * 片段）；此时 `target_status` 工具、收尾门与上游续行都必须照常工作，否则模型仍有
+ * 通道、门却不再提醒，等于把用户主动选择的一种配置方式变成功能缺失。
+ *
+ * 因此本文件验证两件事：
+ * 1. 章节确实不再注册（省 token 的收益成立）；
+ * 2. 工具、收尾门、上游续行**仍然**工作（能力没有被连带关掉）。
  *
  * 驱动方式与其他集成测试一致：假 ctx 跑真实 `apply`。
  * @module
@@ -12,6 +17,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { LlmError } from '@deepseek-ai/dsh-llm'
 import { apply } from '../../src/index.ts'
 
 interface FakeAgent {
@@ -92,44 +98,48 @@ function harness(roots: Agent[], declarationSection: boolean): Harness {
       listeners.get('agent/turn-stopping')?.({ agent, turn, signal: { aborted: false } })
     },
     error(agent, turn) {
-      listeners.get('agent/error')?.({
-        agent,
-        turn,
-        error: Object.assign(new Error('rate limited'), { code: 'RATE_LIMIT' }),
-      })
+      // 必须用真实 LlmError：分类只认它（`error instanceof LlmError`），
+      // 拿普通 Error 加个 code 会被判成 non-retryable，续行分支根本走不到。
+      listeners.get('agent/error')?.({ agent, turn, error: new LlmError('rate limited', 'RATE_LIMIT') })
     },
   }
 }
 
-test('declarationSection=false 时不注册章节与工具', () => {
+test('declarationSection=false 时不注册系统提示词章节', () => {
   const f = fakeAgent()
   const h = harness([f.agent], false)
 
-  assert.equal(h.sectionCalls, 0, '关闭后不得注册系统提示词章节')
-  assert.equal(h.toolCalls, 0, '关闭后不得注册 target_status')
+  assert.equal(h.sectionCalls, 0, '关闭后不得注入系统提示词章节——这是该开关唯一的职责')
 })
 
-test('declarationSection=false 时收尾门不注入', () => {
+test('declarationSection=false 时 target_status 仍然注册', () => {
+  const f = fakeAgent()
+  const h = harness([f.agent], false)
+
+  assert.equal(h.toolCalls, 1, '关掉教学不等于关掉通道：工具必须照常可用')
+})
+
+test('declarationSection=false 时收尾门照常注入', () => {
   const f = fakeAgent()
   const h = harness([f.agent], false)
 
   h.turnStopping(f.agent, 1)
 
-  assert.equal(f.nextStep.length, 0, '没有声明通道就不该催促声明')
+  assert.equal(f.nextStep.length, 1, '工具仍在，门就有可满足的条件，应当继续提醒')
 })
 
-test('declarationSection=false 时上游续行不投递', async () => {
+test('declarationSection=false 时上游续行照常投递', async () => {
   const f = fakeAgent()
   const h = harness([f.agent], false)
 
   h.error(f.agent, 1)
-  // whenIdle 是微任务链，等它跑完再断言。
-  await new Promise((resolve) => setImmediate(resolve))
+  // whenIdle 是微任务链，跑完若干微任务再断言。
+  for (let i = 0; i < 6; i += 1) await Promise.resolve()
 
-  assert.equal(f.nextStep.length, 0, '续行同样以声明通道存在为前提')
+  assert.equal(f.nextStep.length, 1, '续行提醒同样在催促一个仍然可满足的条件')
 })
 
-test('declarationSection=true 时三者照常注册与注入', () => {
+test('declarationSection=true 时章节、工具与门都在', () => {
   const f = fakeAgent()
   const h = harness([f.agent], true)
 

@@ -107,7 +107,9 @@ test('取消与错误在留痕原因上分开', () => {
   assert.equal(errored.reason, 'error')
 })
 
-test('declarationSection 关闭时一律放行', () => {
+test('declarationSection 关闭不影响收尾门判定', () => {
+  // 章节只管系统提示词是否注入；工具与门照常工作。守护进程这一侧若把章节
+  // 接进判定，会出现「客户端在提醒、守护进程不提醒」的分裂行为。
   turnStart('s1', 1, 0)
   const result = turnStopping({
     sessionId: 's1',
@@ -118,8 +120,8 @@ test('declarationSection 关闭时一律放行', () => {
     config: { ...config, declarationSection: false },
     now: 0,
   })
-  assert.equal(result.inject, false)
-  assert.equal(result.reason, 'disabled')
+  assert.equal(result.inject, true)
+  assert.equal(result.reason, 'undeclared')
 })
 
 test('不同会话互不影响', () => {

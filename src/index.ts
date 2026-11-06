@@ -110,8 +110,10 @@ export function apply(ctx: Context, rawConfig: unknown): void {
   // 不在这里 `if (!config.enabled) return`：enabled 是 volatile，用户随时可在设置页关掉，
   // 关掉后必须立刻停止注入。若启动时就 return，开关会变成"改了没反应"。
   //
-  // declarationSection 不同：它决定是否注册章节与工具，而注册是静态的、无法在运行中撤销，
-  // 所以它只在启动时读一次，改了要重启才生效（设置页的说明里写明了这一点）。
+  // declarationSection 只决定**系统提示词章节**是否注入，且只在启动时读一次
+  // （注册是静态的、无法在运行中撤销，改了要重启）。它不连带停用 target_status
+  // 工具、收尾门与上游续行：关掉它的场景是"改用 AGENTS.md 承载规范"（设置页会
+  // 给出可复制的片段），此时模型仍知道 target_status 存在——工具、门、续行照常工作。
   const sectionEnabled = config.declarationSection.get() !== false
 
   if (sectionEnabled) {
@@ -120,15 +122,17 @@ export function apply(ctx: Context, rawConfig: unknown): void {
       order: SECTION_ORDER,
       text: DECLARATION_SECTION,
     })
-
-    registerTargetStatus(
-      ctx,
-      turnOf,
-      () => config.enabled.get() !== false,
-      // 声明走判定通道：远程时由守护进程计数，本地时落到进程内状态。
-      (agent, turn, state) => { void monitor.declare(agent, turn, state) },
-    )
   }
+
+  // 工具与章节解耦：章节只是"首次教学"，关掉教学不等于关掉通道。工具自己的
+  // 总开关是 enabled（volatile，即时生效）。
+  registerTargetStatus(
+    ctx,
+    turnOf,
+    () => config.enabled.get() !== false,
+    // 声明走判定通道：远程时由守护进程计数，本地时落到进程内状态。
+    (agent, turn, state) => { void monitor.declare(agent, turn, state) },
+  )
 
   /**
    * 投递一条自救提醒。
@@ -152,8 +156,8 @@ export function apply(ctx: Context, rawConfig: unknown): void {
     // 宿主在 abort/error 路径不会派发本钩子；这里再挡一次，取消绝不复活（FR-011）。
     if (payload.signal.aborted) return
 
-    // 没有声明通道就没有可满足的条件：此时注入只会催促模型做一件它做不到的事。
-    if (!sectionEnabled) return
+    // 注意：这里**不再**按 sectionEnabled 提前返回。章节可以关（改用 AGENTS.md
+    // 承载规范），但 target_status 仍在，门继续有可满足的条件。
 
     // 降级：若从未收到过任何 finish 帧，说明 assistant-stream 契约不可用，
     // 此时所有轮次都会按 undeclared 处理；只提示一次，避免刷屏。
@@ -219,9 +223,7 @@ export function apply(ctx: Context, rawConfig: unknown): void {
    * @param input - 事件负载中的 agent、轮次与错误
    */
   function scheduleResume(input: { agent: Agent; turn: number; error: unknown }): void {
-    // 续行投递的正文是「去声明」的提醒；声明通道关着时它同样无从满足。
-    if (!sectionEnabled) return
-
+    // 与收尾门同理：章节关掉时 target_status 仍在，续行提醒仍有可满足的条件。
     const { agent, turn, error } = input
     const errorCode = errorCodeOf(error)
     const retryable = classifyUpstreamError(error) === 'retryable'

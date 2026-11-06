@@ -55,6 +55,34 @@ test('bundle 内联了规范正文，与宿主常量一致', { skip: !built }, a
   assert.ok(bundle.includes(JSON.stringify(declarationText)), '客户端复制的规范正文必须来自宿主构建产物')
 })
 
+/**
+ * 测试沙箱里的宿主模块表：客户端允许 require 的裸模块名。
+ *
+ * `@deepseek-ai/dsh-client-ui-primitives` 是宿主基线模块（平台模块表自带），
+ * 不需要 `dsh.client.external` 声明；它的样式与暗色主题由宿主 CSS 负责，这里
+ * 只给同名假实现让工厂能跑完。
+ */
+const HOST_MODULES: Record<string, unknown> = {
+  react: {
+    useState: (init: unknown) => [typeof init === 'function' ? (init as () => unknown)() : init, () => {}],
+    useEffect: () => {},
+    useMemo: (fn: () => unknown) => fn(),
+    useRef: (value: unknown) => ({ current: value }),
+  },
+  'react/jsx-runtime': { jsx: () => null, jsxs: () => null, Fragment: 'Fragment' },
+  '@deepseek-ai/dsh-client-ui-primitives': {
+    Switch: () => null,
+    Input: () => null,
+    Button: () => null,
+  },
+}
+
+function hostRequire(name: string): unknown {
+  const provided = HOST_MODULES[name]
+  if (provided !== undefined) return provided
+  throw new Error(`unexpected require: ${name}`)
+}
+
 test('bundle 声明了 remote.settings 注入，否则设置分区会在渲染期崩溃', { skip: !built }, async () => {
   // 回归：typert 远程代理的属性有独立访问门。只注入 `remote` 时，组件里读
   // `ctx.remote.settings` 会抛 `cannot get property "remote.settings" without inject`；
@@ -65,20 +93,7 @@ test('bundle 声明了 remote.settings 注入，否则设置分区会在渲染�
     window: {
       __ModuleLoader__: {
         load: ({ factory }: { factory: (require: (name: string) => unknown) => { inject?: unknown } }) => {
-          loaded = factory((name: string) => {
-            if (name === 'react') {
-              return {
-                useState: (init: unknown) => [typeof init === 'function' ? (init as () => unknown)() : init, () => {}],
-                useEffect: () => {},
-                useMemo: (fn: () => unknown) => fn(),
-                useRef: (value: unknown) => ({ current: value }),
-              }
-            }
-            if (name === 'react/jsx-runtime') {
-              return { jsx: () => null, jsxs: () => null, Fragment: 'Fragment' }
-            }
-            throw new Error(`unexpected require: ${name}`)
-          })
+          loaded = factory(hostRequire)
         },
       },
     },
@@ -102,13 +117,7 @@ test('bundle 把分区注册到 settings.section，id 与 profile 条目一致',
     window: {
       __ModuleLoader__: {
         load: ({ factory }: { factory: (require: (name: string) => unknown) => { apply?: (context: unknown) => void } }) => {
-          loaded = factory((name: string) => {
-            if (name === 'react') {
-              return { useState: (init: unknown) => [init, () => {}], useEffect: () => {}, useMemo: (fn: () => unknown) => fn(), useRef: () => ({}) }
-            }
-            if (name === 'react/jsx-runtime') return { jsx: () => null, jsxs: () => null, Fragment: 'Fragment' }
-            throw new Error(`unexpected require: ${name}`)
-          })
+          loaded = factory(hostRequire)
         },
       },
     },

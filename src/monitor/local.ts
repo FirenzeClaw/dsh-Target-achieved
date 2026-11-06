@@ -75,7 +75,8 @@ export function createLocalMonitor(config: () => TargetMonitorConfig, now: () =>
         })
         return Promise.resolve({ resume: false, reason: 'non-retryable' })
       }
-      if (!current.enabled || !current.declarationSection) return Promise.resolve({ resume: false, reason: 'disabled' })
+      // 只按总开关与续行开关判定：章节是否注入不影响续行（见 src/index.ts 的说明）。
+      if (!current.enabled) return Promise.resolve({ resume: false, reason: 'disabled' })
       if (!current.resumeOnUpstreamError) return Promise.resolve({ resume: false, reason: 'disabled' })
       // 先占轮次再排队：同一轮可能触发多次 agent/error，不去重会投递两次。
       return Promise.resolve({ resume: claimResumeTurn(agent, turn), reason: 'ok' })
@@ -94,7 +95,7 @@ export function createLocalMonitor(config: () => TargetMonitorConfig, now: () =>
         return Promise.resolve({ resume: false, reason })
       }
 
-      if (!current.enabled || !current.declarationSection) return rejected('disabled')
+      if (!current.enabled) return rejected('disabled')
       if (!current.resumeOnUpstreamError) return rejected('disabled')
       const consecutive = resumeStateOf(agent)?.consecutive ?? 0
       if (consecutive >= current.maxResumes) return rejected('capped')

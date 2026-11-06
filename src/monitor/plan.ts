@@ -10,8 +10,26 @@
  * @module
  */
 import type { StopCause } from '../cause.ts'
-import type { TargetMonitorConfig } from '../config.ts'
 import type { GateReason } from '../trace.ts'
+
+/**
+ * 判定真正读到的配置面。
+ *
+ * 刻意窄于 `TargetMonitorConfig`：判定只比较总开关与这三个阈值，**不**读
+ * `declarationSection`（那只决定系统提示词章节是否注入）、也不读 `crossProcess`
+ * （那是启动期选通道的事）。收窄类型能让「把章节开关接进判定」这类误改在编译期
+ * 就撞墙，而不是等线上表现成「关了教学就不再提醒」。
+ */
+export interface GateConfig {
+  /** 总开关；关闭时一切放行。 */
+  enabled: boolean
+  /** 同一轮第几次注入时向用户发「可能卡住」提示。 */
+  stallNoticeThreshold: number
+  /** 跨轮累计遗忘多少次后复述规范。 */
+  reminderThreshold: number
+  /** 注入后多久内的声明算「被提醒才想起来」。 */
+  reactionWindowMs: number
+}
 
 /** 判定所需的最小输入面。 */
 export interface TurnStoppingPlanInput {
@@ -29,8 +47,8 @@ export interface TurnStoppingPlanInput {
   noticeShown: boolean
   /** 跨轮累计的遗忘次数。 */
   forgetCount: number
-  /** 当前配置快照。 */
-  config: TargetMonitorConfig
+  /** 当前配置快照（判定只读阈值三项）。 */
+  config: GateConfig
 }
 
 /** 判定结果：要么放行并给出原因，要么注入并给出正文组合所需的事实。 */
